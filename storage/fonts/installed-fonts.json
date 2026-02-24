@@ -1,0 +1,22 @@
+{
+    "roboto": {
+        "100_italic": "C:\\OpenServer\\domains\\emediator.loc\\storage\\fonts\/roboto_100_italic_1e79e3ccd8e973aa41d180d4d75351e9",
+        "200_italic": "C:\\OpenServer\\domains\\emediator.loc\\storage\\fonts\/roboto_200_italic_8ad70d4ea557f46e67f4174e08c6143b",
+        "300_italic": "C:\\OpenServer\\domains\\emediator.loc\\storage\\fonts\/roboto_300_italic_3a4c96a90633a18b481b9dee4031583f",
+        "italic": "C:\\OpenServer\\domains\\emediator.loc\\storage\\fonts\/roboto_italic_239e2bfb810acf9e47301b3e77eebf5f",
+        "500_italic": "C:\\OpenServer\\domains\\emediator.loc\\storage\\fonts\/roboto_500_italic_6c4420e31926bb1184794ed89bcf4c1c",
+        "600_italic": "C:\\OpenServer\\domains\\emediator.loc\\storage\\fonts\/roboto_600_italic_ee2b25cd5a2016604ed1f75fa31ba7e1",
+        "bold_italic": "C:\\OpenServer\\domains\\emediator.loc\\storage\\fonts\/roboto_bold_italic_654e8099e9a8c681cf56c03d152fd62a",
+        "800_italic": "C:\\OpenServer\\domains\\emediator.loc\\storage\\fonts\/roboto_800_italic_8757a888c7d6b7d5b57c0144bd53cc9c",
+        "900_italic": "C:\\OpenServer\\domains\\emediator.loc\\storage\\fonts\/roboto_900_italic_8cb39ecf86c4d2ab261cd000d12ac3f0",
+        "100": "C:\\OpenServer\\domains\\emediator.loc\\storage\\fonts\/roboto_100_c5721e98945d50336ed0e066057f458e",
+        "200": "C:\\OpenServer\\domains\\emediator.loc\\storage\\fonts\/roboto_200_efc9d294cb5e84866310f6d011ef68b2",
+        "300": "C:\\OpenServer\\domains\\emediator.loc\\storage\\fonts\/roboto_300_2adc38dee1e6978b909890c30d64ea6f",
+        "normal": "C:\\OpenServer\\domains\\emediator.loc\\storage\\fonts\/roboto_normal_826b21c6e9e390acde75d9452fa9e59f",
+        "500": "C:\\OpenServer\\domains\\emediator.loc\\storage\\fonts\/roboto_500_6c31329457813f7a8ebc5a352147fef5",
+        "600": "C:\\OpenServer\\domains\\emediator.loc\\storage\\fonts\/roboto_600_7674879c5c86764ac3eb4516d58c134d",
+        "bold": "C:\\OpenServer\\domains\\emediator.loc\\storage\\fonts\/roboto_bold_1a8c4a1acbd70e6f5947d46ac9a3bfc6",
+        "800": "C:\\OpenServer\\domains\\emediator.loc\\storage\\fonts\/roboto_800_d15c977d48011bfa2c7ece830e5fd04e",
+        "900": "roboto_900_9fe88a0540d48d043e0aa7abb9ab4e7b"
+    }
+}

@@ -1,0 +1,18 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Color extends Model
+{
+    use HasFactory;
+    protected $table = 'colors';
+    protected $primaryKey = 'color_id';
+
+    public function colors_lang()
+    {
+        return $this->hasMany(ColorLang::class, 'color_id', 'color_id');
+    }
+}

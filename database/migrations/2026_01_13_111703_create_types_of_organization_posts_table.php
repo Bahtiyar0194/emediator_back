@@ -4,7 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-class CreateCitiesTable extends Migration
+class CreateTypesOfOrganizationPostsTable extends Migration
 {
     /**
      * Run the migrations.
@@ -13,16 +13,11 @@ class CreateCitiesTable extends Migration
      */
     public function up()
     {
-        Schema::create('cities', function (Blueprint $table) {
-            $table->increments('city_id');
-            $table->string('city_slug');
-            $table->string('latitude');
-            $table->string('longitude');
-            $table->integer('region_id')->unsigned()->nullable();
-            $table->foreign('region_id')->references('region_id')->on('regions')->onDelete('cascade');
+        Schema::create('types_of_organization_posts', function (Blueprint $table) {
+            $table->increments('post_type_id');
+            $table->string('post_type_slug');
             $table->integer('show_status_id')->default(1)->unsigned();
             $table->foreign('show_status_id')->references('show_status_id')->on('show_status');
-            $table->timestamps();
         });
     }
 
@@ -33,6 +28,6 @@ class CreateCitiesTable extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('cities');
+        Schema::dropIfExists('types_of_organization_posts');
     }
 }

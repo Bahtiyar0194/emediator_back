@@ -253,5 +253,34 @@ return [
         'time'                  => 'Время',
         'available'             => 'Доступно',
         'size'                  => 'Размер',
-    ],
+
+        'agreement_data' => [
+            'amount_of_debt'         => 'Сумма долга',
+            'basis_for_issuing_loan' => 'Основание для займа',
+
+            'receipt_date'           => 'Дата составления расписки',
+            'contract_num'           => '№ договора',
+            'contract_date'          => 'Дата составления договора',
+
+            'repayment_start_date'   => 'Дата начала погашения',
+            'repayment_period'       => 'Срок погашения (в месяцах)',
+
+            'iik'                    => 'ИИК (IBAN)',
+            'bik'                    => 'БИК',
+            'bank_name'              => 'Название банка',
+
+            'car_brand'              => 'Марка ТС',
+            'car_model'              => 'Модель ТС',
+            'state_registration_number' => 'ГРНЗ (регистрационный номер)',
+            'vin_code'               => 'VIN код (номер кузова)',
+            'year_of_release'        => 'Год выпуска',
+            'car_amount'             => 'Стоимость транспортного средства',
+            'rent_amount'            => 'Арендная плата',
+            'rent_start_date'        => 'Дата начала аренды',
+            'rent_period'            => 'Срок аренды (в месяцах)',
+
+            'monthly_amount'         => 'Сумма ежемесячного платежа',
+            'start_payment_date'     => 'Дата начала платежа',
+        ]
+    ], 
 ];

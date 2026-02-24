@@ -4,7 +4,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\AuthController;
-
+use App\Http\Controllers\LocationController;
+use App\Http\Controllers\AgreementController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -30,6 +31,8 @@ Route::group([
 
         Route::group(['middleware' => ['auth:sanctum']], function () {
             Route::get('/me', [AuthController::class, 'me']);
+            Route::post('/change_mode/{role_type_id}', [AuthController::class, 'change_mode']);
+            Route::post('/change_language/{lang_tag}', [AuthController::class, 'change_language']);
             //Route::post('/change_mode/{role_type_id}', [AuthController::class, 'change_mode']);
             //Route::post('/change_language/{lang_tag}', [AuthController::class, 'change_language']);
             //Route::post('/change_theme/{theme_slug}', [AuthController::class, 'change_theme']);
@@ -42,4 +45,22 @@ Route::group([
         });
     });
 
+    Route::group([
+        'prefix' => 'locations'
+    ], function ($router) {
+        Route::get('/get', [LocationController::class, 'get']);
+    });
+
+    Route::group([
+        'prefix' => 'agreement'
+    ], function ($router) {
+        Route::group(['middleware' => ['auth:sanctum']], function () {
+            Route::get('/get_attributes', [AgreementController::class, 'get_attributes']);
+            Route::post('/get', [AgreementController::class, 'get_agreements']);
+            Route::post('/create', [AgreementController::class, 'create']);
+            Route::post('/get/{uuid}', [AgreementController::class, 'get_agreement']);
+        });
+
+        Route::get('/get_file/{uuid}', [AgreementController::class, 'get_agreement_file']);
+    });
 });

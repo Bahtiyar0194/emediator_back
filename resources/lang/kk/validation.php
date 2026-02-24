@@ -236,5 +236,33 @@ return [
         'time'                  => 'Уақыт',
         'available'             => 'Қолжетімді',
         'size'                  => 'Көлемі',
+
+        'agreement_data' => [
+            'amount_of_debt'         => 'Қарыз сомасы',
+            'basis_for_issuing_loan' => 'Қарыздың негіздемесі',
+            'receipt_date'           => 'Қолхат жасалған күн',
+            'contract_num'           => 'Шарт №',
+            'contract_date'          => 'Шарт жасалған күн',
+
+            'repayment_start_date'   => 'Қарызды өтеп бастайтын күн',
+            'repayment_period'       => 'Қарызды өтеу мерзімі (ай)',
+
+            'iik'                    => 'ЖСК (IBAN)',
+            'bik'                    => 'БСК',
+            'bank_name'              => 'Банктің атауы',
+
+            'car_brand'              => 'Көліктің маркасы',
+            'car_model'              => 'Көліктің моделі',
+            'state_registration_number' => 'Мемлекеттік тіркеу нөмірлік белгісі',
+            'vin_code'               => 'VIN код (шанақ нөмірі)',
+            'year_of_release'        => 'Шыққан жылы',
+            'car_amount'             => 'Көліктің жалпы құны',
+            'rent_amount'            => 'Жалдау ақысы',
+            'rent_start_date'        => 'Жалға алудың басталу күні',
+            'rent_period'            => 'Жалдау мерзімі (ай саны)',
+
+            'agreement_data.monthly_amount'         => 'Ай сайынғы төлем құны',
+            'agreement_data.start_payment_date'     => 'Төлемді бастау күні',
+        ]
     ],
 ];
