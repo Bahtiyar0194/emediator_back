@@ -1,11 +1,11 @@
-@extends('layouts.agreement')
+@extends('layouts.mediation.agreement')
 
-@section('content')
+@section('agreement_content')
 <li>
-    Сторона-1 передает в аренду на временное пользование автомашину марки <b>"{{$data['car_brand']}} {{$data['car_model']}}"</b>, регистрационный номер: <b style="white-space: nowrap">{{$data['state_registration_number']}}</b>, VIN код: <b>{{$data['vin_code']}}</b>, цвет <b>"{{getColorName($data['body_color_id'], 2)}}", {{ $data['year_of_release']}} г.в</b>, со сроком на {{$data['rent_period']}} {{monthsWord($data['rent_period'])}}</b>, а Сторона-2 в свою очередь принимает вышеуказанную автомашину в аренду на временное пользование и уплачивает до окончания срока аренды Cтороне-1 согласно п.3 и п.4 настоящего соглашения.
+    Сторона-1 передает в аренду на временное пользование автомашину марки <b>"{{$data->car_brand}} {{$data->car_model}}"</b>, регистрационный номер: <b style="white-space: nowrap">{{$data->state_registration_number}}</b>, VIN код: <b>{{$data->vin_code}}</b>, цвет <b>"{{getColorName($data->body_color_id, 2)}}", {{ $data->year_of_release}} г.в</b>, со сроком <b>на {{$data->rent_period}} {{monthsWord($data->rent_period)}}</b>, а Сторона-2 в свою очередь принимает вышеуказанную автомашину в аренду на временное пользование и уплачивает до окончания срока аренды Cтороне-1 согласно п.3 и п.4 настоящего соглашения.
 </li>
 
-<li>Стоимость автомашины, указанная в п.1 настоящего соглашения составляет <b style="white-space: nowrap">{{ $data['car_amount'] }} ({{ numStr((int) str_replace(' ', '', $data['car_amount']), 'ru') }}) тенге</b>.</li>
+<li>Стоимость автомашины, указанная в п.1 настоящего соглашения составляет <b style="white-space: nowrap">{{ number_format((int) str_replace(' ', '', $data->car_amount), 0, '.', ' ') }} ({{ numStr((int) str_replace(' ', '', $data->car_amount), 'ru') }}) тенге</b>.</li>
 
 <li style="margin-bottom: 10px">Сторона-2 за аренду автомашины, указанной в п.1 настоящего соглашения производит оплату, в следующем порядке:</li>
 
@@ -22,9 +22,9 @@
     </thead>
 
     @php
-        $period = $data['rent_period'];
+        $period = $data->rent_period;
         $half = ceil($period / 2);
-        $amount = (int) str_replace(' ', '', $data['rent_amount']);
+        $amount = (int) str_replace(' ', '', $data->rent_amount);
     @endphp
 
     <tbody>
@@ -32,13 +32,13 @@
         <tr>
             {{-- Левая часть --}}
             <td>{{ $i + 1 }}</td>
-            <td>{{ formatDate(addMonths($data['rent_start_date'], $i + 1), 'd.m.Y') }}</td>
+            <td>{{ formatDate(addMonths($data->rent_start_date, $i + 1), 'd.m.Y') }}</td>
             <td>{{ number_format($amount, 0, '.', ' ') }} тг</td>
 
             {{-- Правая часть --}}
             @if($i + $half < $period)
                 <td>{{ $i + $half + 1 }}</td>
-                <td>{{ formatDate(addMonths($data['rent_start_date'], $i + $half + 1), 'd.m.Y') }}</td>
+                <td>{{ formatDate(addMonths($data->rent_start_date, $i + $half + 1), 'd.m.Y') }}</td>
                 <td>{{ number_format($amount, 0, '.', ' ') }} тг</td>
             @else
                 <td></td>

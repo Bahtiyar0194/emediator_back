@@ -7,10 +7,27 @@ use App\Models\AgreementType;
 use App\Models\Agreement;
 use App\Models\Location;
 use App\Models\Language;
+use App\Models\Bank;
 use App\Models\Color;
+use App\Models\User;
+use App\Models\AgreementParty;
+use App\Models\Mediator;
+
+use App\Models\MediationContract;
+use App\Models\MediationContractParty;
+
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
+use Illuminate\Support\Facades\Http;
+use GuzzleHttp\Client;
+use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Facades\Crypt;
+use Storage;
+use File;
+use Config;
 use Validator;
 use Log;
 use Str;
+use Carbon\Carbon;
 
 use App\Services\LocationService;
 use App\Services\AgreementService;
@@ -55,6 +72,25 @@ class AgreementController extends Controller
         ->orderBy('colors_lang.color_name', 'asc')
         ->get();
 
+        $banks = Bank::leftJoin('banks_lang', 'banks.bank_id', '=', 'banks_lang.bank_id')
+        ->select(
+            'banks.bank_id',
+            'banks_lang.bank_name'
+        )
+        ->where('banks_lang.lang_id', '=', $language->lang_id)
+        ->orderBy('banks_lang.bank_name', 'asc')
+        ->get();
+
+        $mediators = Mediator::leftJoin('users', 'mediators.user_id', '=', 'users.user_id')
+        ->select(
+            'users.first_name',
+            'users.last_name',
+            'users.given_name',
+            'users.user_id',
+            'mediators.association_name_full'
+        )
+        ->get();
+
         $locations = $this->locationService->get_locations($language);
         $agreement_types = $this->agreementService->get_agreement_types($language);
 
@@ -65,6 +101,8 @@ class AgreementController extends Controller
         $attributes->legal_forms = $legal_forms;
         $attributes->posts = $posts;
         $attributes->colors = $colors;
+        $attributes->banks = $banks;
+        $attributes->mediators = $mediators;
 
         return response()->json($attributes, 200);
     }
@@ -72,28 +110,56 @@ class AgreementController extends Controller
     public function get_agreements(Request $request){
         $language = Language::where('lang_tag', '=', $request->header('Accept-Language'))->first();
 
+        $auth_user = auth()->user();
+
         // Получаем параметры лимита на страницу
         $per_page = $request->per_page ? $request->per_page : 10;
         // Получаем параметры сортировки
         $sortKey = $request->input('sort_key', 'agreements.created_at');  // Поле для сортировки по умолчанию
         $sortDirection = $request->input('sort_direction', 'asc');  // Направление по умолчанию
 
-        $agreements = Agreement::leftJoin('types_of_agreements', 'agreements.agreement_type_id', '=', 'types_of_agreements.agreement_type_id')
-        ->leftJoin('types_of_agreements_lang', 'types_of_agreements.agreement_type_id', '=', 'types_of_agreements_lang.agreement_type_id')
-        ->leftJoin('users as initiator', 'agreements.initiator_id', '=', 'initiator.user_id')
-        ->leftJoin('users as mediator', 'agreements.mediator_id', '=', 'mediator.user_id')
-        ->select(
-            'agreements.uuid',
-            'initiator.first_name as initiator_first_name',
-            'initiator.last_name as initiator_last_name',
-            'mediator.first_name as mediator_first_name',
-            'mediator.last_name as mediator_last_name',
-            'types_of_agreements_lang.agreement_type_name',
-            'agreements.created_at'
-        )
-        ->where('types_of_agreements_lang.lang_id', '=', $language->lang_id)
-        ->distinct()
-        ->orderBy($sortKey, $sortDirection);
+        $agreements = Agreement::leftJoin('agreement_parties', 'agreements.agreement_id', '=', 'agreement_parties.agreement_id')
+            ->leftJoin('types_of_agreements', 'agreements.agreement_type_id', '=', 'types_of_agreements.agreement_type_id')
+            ->leftJoin('types_of_agreements_lang', 'types_of_agreements.agreement_type_id', '=', 'types_of_agreements_lang.agreement_type_id')
+            ->leftJoin('users as initiator', 'agreements.initiator_id', '=', 'initiator.user_id')
+
+            // ✅ статус agreement
+            ->leftJoin('types_of_status as agreement_status', 'agreements.status_type_id', '=', 'agreement_status.status_type_id')
+            ->leftJoin('types_of_status_lang as agreement_status_lang', function ($join) use ($language) {
+                $join->on('agreement_status.status_type_id', '=', 'agreement_status_lang.status_type_id')
+                    ->where('agreement_status_lang.lang_id', $language->lang_id);
+            })
+
+            // ✅ контракт
+            ->leftJoin('mediation_contracts', 'agreements.agreement_id', '=', 'mediation_contracts.agreement_id')
+
+            // ✅ статус contract
+            ->leftJoin('types_of_status as contract_status', 'mediation_contracts.status_type_id', '=', 'contract_status.status_type_id')
+            ->leftJoin('types_of_status_lang as contract_status_lang', function ($join) use ($language) {
+                $join->on('contract_status.status_type_id', '=', 'contract_status_lang.status_type_id')
+                    ->where('contract_status_lang.lang_id', $language->lang_id);
+            })
+
+            ->select(
+                'agreements.uuid',
+                'initiator.first_name as initiator_first_name',
+                'initiator.last_name as initiator_last_name',
+                'types_of_agreements_lang.agreement_type_name',
+                'agreements.created_at',
+
+                // 👇 статусы
+                'agreements.status_type_id as agreement_status_id',
+                'agreement_status.color as agreement_status_color',
+                'agreement_status_lang.status_type_name as agreement_status_name',
+
+                'mediation_contracts.status_type_id as contract_status_id',
+                'contract_status.color as contract_status_color',
+                'contract_status_lang.status_type_name as contract_status_name',
+            )
+            ->where('agreement_parties.user_id', $auth_user->user_id)
+            ->where('types_of_agreements_lang.lang_id', $language->lang_id)
+            ->distinct()
+            ->orderBy($sortKey, $sortDirection);
 
         // Применяем фильтрацию по параметрам из запроса
         $created_at_from = $request->created_at_from;
@@ -118,20 +184,14 @@ class AgreementController extends Controller
         $agreement = Agreement::leftJoin('types_of_agreements', 'agreements.agreement_type_id', '=', 'types_of_agreements.agreement_type_id')
         ->leftJoin('types_of_agreements_lang', 'types_of_agreements.agreement_type_id', '=', 'types_of_agreements_lang.agreement_type_id')
         ->leftJoin('users as initiator', 'agreements.initiator_id', '=', 'initiator.user_id')
-        ->leftJoin('users as mediator', 'agreements.mediator_id', '=', 'mediator.user_id')
-        ->leftJoin('mediators', 'agreements.mediator_id', '=', 'mediators.user_id')
         ->select(
+            'agreements.agreement_id',
+            'agreements.agreement_type_id',
             'agreements.uuid',
             'agreements.data',
+            'agreements.sigex_document_id',
             'initiator.first_name as initiator_first_name',
             'initiator.last_name as initiator_last_name',
-            'mediator.first_name as mediator_first_name',
-            'mediator.last_name as mediator_last_name',
-            'mediator.given_name as mediator_given_name',
-            'mediators.association_name_short',
-            'mediators.association_name_full',
-            'mediators.cert_num',
-            'mediators.cert_date',
             'types_of_agreements.agreement_slug',
             'types_of_agreements_lang.agreement_type_name',
             'agreements.created_at'
@@ -141,83 +201,155 @@ class AgreementController extends Controller
         ->distinct()
         ->firstOrFail();
 
-        return response()->json($agreement, 200); 
-    }
+        $agreement->data = json_decode(Crypt::decryptString($agreement->data));
 
-    public function get_agreement_file(Request $request){
-        // $language = Language::where('lang_tag', '=', $request->header('Accept-Language'))->first();
-
-        $agreement = Agreement::leftJoin('types_of_agreements', 'agreements.agreement_type_id', '=', 'types_of_agreements.agreement_type_id')
-        // ->leftJoin('types_of_agreements_lang', 'types_of_agreements.agreement_type_id', '=', 'types_of_agreements_lang.agreement_type_id')
-        ->leftJoin('users as initiator', 'agreements.initiator_id', '=', 'initiator.user_id')
-        ->leftJoin('users as mediator', 'agreements.mediator_id', '=', 'mediator.user_id')
-        ->leftJoin('mediators', 'agreements.mediator_id', '=', 'mediators.user_id')
+        $agreement_parties = AgreementParty::leftJoin('users', 'agreement_parties.user_id', '=', 'users.user_id')
         ->select(
-            'agreements.agreement_id',
-            'agreements.uuid',
-            'agreements.data',
-            'initiator.first_name as initiator_first_name',
-            'initiator.last_name as initiator_last_name',
-            'mediator.first_name as mediator_first_name',
-            'mediator.last_name as mediator_last_name',
-            'mediator.given_name as mediator_given_name',
-            'mediators.association_name_short',
-            'mediators.association_name_full',
-            'mediators.cert_num',
-            'mediators.cert_date',
-            'types_of_agreements.agreement_slug',
-            // 'types_of_agreements_lang.agreement_type_name',
-            'agreements.created_at'
+            'users.first_name',
+            'users.last_name',
+            'users.given_name',
+            'users.iin',
+            'users.data',
+            'agreement_parties.user_id',
+            'agreement_parties.is_mediator',
+            'agreement_parties.sigex_sign_id',
+            'agreement_parties.sigex_sign',
+            'agreement_parties.signed_at'
         )
-        ->where('agreements.uuid', $request->uuid)
-        // ->where('types_of_agreements_lang.lang_id', '=', $language->lang_id)
-        ->distinct()
+        ->where('agreement_parties.agreement_id', $agreement->agreement_id)
+        ->orderBy('id', 'asc')
+        ->get();
+
+        foreach ($agreement_parties as $key => $party) {
+            if(isset($party->data)){
+                $party->data = json_decode(Crypt::decryptString($party->data));
+            }
+
+            if($party->is_mediator === 1){
+                $agreement->mediator_id = $party->user_id;
+            }
+        }
+
+        $agreement->parties = $agreement_parties;
+
+        $contract = MediationContract::where('agreement_id', '=', $agreement->agreement_id)
         ->firstOrFail();
-        
 
-        $pdf = Pdf::loadView('agreements.'.$agreement->agreement_slug, [
+        $contract->data = json_decode(Crypt::decryptString($contract->data));
+
+        $contract_parties = MediationContractParty::leftJoin('users', 'mediation_contract_parties.user_id', '=', 'users.user_id')
+        ->select(
+            'users.first_name',
+            'users.last_name',
+            'users.given_name',
+            'users.iin',
+            'users.data',
+            'mediation_contract_parties.user_id',
+            'mediation_contract_parties.is_mediator',
+            'mediation_contract_parties.sigex_sign_id',
+            'mediation_contract_parties.sigex_sign',
+            'mediation_contract_parties.signed_at'
+        )
+        ->where('mediation_contract_parties.mediation_contract_id', $contract->mediation_contract_id)
+        ->orderBy('mediation_contract_parties.id', 'asc')
+        ->get();
+
+        foreach ($contract_parties as $key => $party) {
+            if(isset($party->data)){
+                $party->data = json_decode(Crypt::decryptString($party->data));
+            }
+
+            if($party->is_mediator === 1){
+                $mediator = Mediator::where('user_id', $party->user_id)
+                ->first();
+
+                $party->mediator = $mediator;
+            }
+        }
+
+        $contract->parties = $contract_parties;
+
+        return response()->json([
             'agreement' => $agreement,
-            'data' => $agreement->data
-        ])
-        ->setOption('title', 'fdsf')
-        ->setOption('author', 'EMediator.kz');
-
-        $filename = sprintf(
-            'agreement_%s_%s.pdf',
-            $agreement->agreement_id,
-            $agreement->created_at->format('Y-m-d')
-        );
-
-        //return $pdf->download('invoice.pdf');
-        // или
-        return $pdf->stream($filename);
+            'contract' => $contract
+        ], 200); 
     }
 
-    public function create(Request $request){
+    public function get_file(Request $request){
+
+        if($request->document === 'agreement'){
+            $document_path = 'app/public/agreements';
+        }
+        elseif($request->document === 'contract'){
+            $document_path = 'app/public/agreements/contracts';
+        }
+
+        $path = storage_path($document_path.'/'.$request->type.'/' . $request->uuid . '.pdf');
+        
+        if (!File::exists($path)) {
+            return response()->json(['status' => 'error', 'message' => 'File not found'], 404);
+        }
+
+        $type = File::mimeType($path);
+
+        $file = File::get($path);
+        $response = Response::make($file, 200);
+
+        if($request->type === 'original'){
+            $base64 = base64_encode($file);
+            $mime = File::mimeType($path);
+
+            return response()->json([
+                'data' => $base64,
+                'mime' => $mime
+            ], 200);
+        }
+
+        $response->header("Content-Type", $type);
+        return $response;
+    }
+
+    public function save(Request $request){
         $language = Language::where('lang_tag', '=', $request->lang)->first();
 
         $rules = [];
 
-        if ($request->step == 1) {
+        if (in_array($request->step, [1, 2])) {
+
+            $index = $request->step - 1;
+
             $rules = [
-                'first_name_1' => 'required|string',
-                'last_name_1' => 'required|string',
-                'iin_1' => 'required|string|size:12',
-                'location_id_1' => 'required|numeric',
-                'street_1' => 'required|string|between:2,100',
-                'house_1' => 'required|between:1,10',
+                "agreement_parties.$index.data.is_legal" => 'required|boolean',
+                "agreement_parties.$index.first_name" => 'required|string',
+                "agreement_parties.$index.last_name" => 'required|string',
+                "agreement_parties.$index.iin" => 'required|string|size:12',
+                "agreement_parties.$index.data.location_id" => 'required|numeric',
+                "agreement_parties.$index.data.street" => 'required|string|between:2,100',
+                "agreement_parties.$index.data.house" => 'required|between:1,10',
+
+                "agreement_parties.$index.data.legal_form_id" =>
+                    "nullable|required_if:agreement_parties.$index.data.is_legal,true|numeric",
+
+                "agreement_parties.$index.data.post_type_id" =>
+                    "nullable|required_if:agreement_parties.$index.data.is_legal,true|numeric",
+
+                "agreement_parties.$index.data.bin" =>
+                    "nullable|required_if:agreement_parties.$index.data.is_legal,true|string|size:12",
+
+                "agreement_parties.$index.data.company_name" =>
+                    "nullable|required_if:agreement_parties.$index.data.is_legal,true|string",
+
+                "agreement_parties.$index.data.company_location_id" =>
+                    "nullable|required_if:agreement_parties.$index.data.is_legal,true|numeric",
+
+                "agreement_parties.$index.data.company_street" =>
+                    "nullable|required_if:agreement_parties.$index.data.is_legal,true|string|between:2,100",
+
+                "agreement_parties.$index.data.company_building" =>
+                    "nullable|required_if:agreement_parties.$index.data.is_legal,true|between:1,10",
+
                 'step' => 'required|numeric',
             ];
-
-            if($request->is_legal_1 === true){
-                $rules['legal_form_id_1'] = 'required|numeric';
-                $rules['post_type_id_1'] = 'required|numeric';
-                $rules['bin_1'] = 'required|string|size:12';
-                $rules['company_name_1'] = 'required|string';
-                $rules['company_location_id_1'] = 'required|numeric';
-                $rules['company_street_1'] = 'required|string|between:2,100';
-                $rules['company_building_1'] = 'required|between:1,10';
-            }
 
             $validator = Validator::make($request->all(), $rules);
 
@@ -226,41 +358,10 @@ class AgreementController extends Controller
             }
 
             return response()->json([
-                'step' => 1
+                'step' => $request->step
             ], 200);
         }
-        elseif ($request->step == 2) {
-            $rules = [
-                'first_name_2' => 'required|string',
-                'last_name_2' => 'required|string',
-                'iin_2' => 'required|string|size:12',
-                'location_id_2' => 'required|numeric',
-                'street_2' => 'required|string|between:2,100',
-                'house_2' => 'required|between:1,10',
-                'step' => 'required|numeric',
-            ];
-
-            if($request->is_legal_2 === true){
-                $rules['legal_form_id_2'] = 'required|numeric';
-                $rules['post_type_id_2'] = 'required|numeric';
-                $rules['bin_2'] = 'required|string|size:12';
-                $rules['company_name_2'] = 'required|string';
-                $rules['company_location_id_2'] = 'required|numeric';
-                $rules['company_street_2'] = 'required|string|between:2,100';
-                $rules['company_building_2'] = 'required|between:1,10';
-            }
-
-            $validator = Validator::make($request->all(), $rules);
-
-            if ($validator->fails()) {
-                return response()->json($validator->errors(), 422);
-            }
-
-            return response()->json([
-                'step' => 2
-            ], 200);
-        }
-        elseif($request->step == 3){
+        elseif($request->step === 3){
 
             $rules = [
                 'agreement_type_id' => 'required|numeric',
@@ -293,7 +394,7 @@ class AgreementController extends Controller
 
                             $agreementRules['repayment_start_date'] = 'required|date';
                             $agreementRules['repayment_period'] = 'required|numeric';
-                            $agreementRules['bank_name'] = 'required';
+                            $agreementRules['bank_id'] = 'required';
                             $agreementRules['iik'] = 'required';
                             $agreementRules['bik'] = 'required';
                         }
@@ -351,22 +452,398 @@ class AgreementController extends Controller
                 return response()->json($validator->errors(), 422);
             }
 
+            return response()->json([
+                'step' => $request->step
+            ], 200);
+        }
+        else{
+
+            $index = $request->step - 1;
+
+            $rules = [
+                'mediator_id' => 'required|numeric',
+                'contract_data.prepayment' => 'required|string',
+                'contract_data.award' => 'required|string',
+                'step' => 'required|numeric',
+            ];
+
+            $validator = Validator::make($request->all(), $rules);
+
+            if ($validator->fails()) {
+                return response()->json($validator->errors(), 422);
+            }
+
             $data = collect($request->except(['lang', 'step']))
             ->map(function ($v){
                 return is_string($v) ? strip_tags($v) : $v;
             })
             ->toArray();
 
-            $new_agreement = new Agreement();
-            $new_agreement->uuid = str_replace('-', '', (string) Str::uuid());
-            $new_agreement->initiator_id = auth()->user()->user_id;
-            $new_agreement->mediator_id = 3;
-            $new_agreement->data = $data;
-            $new_agreement->agreement_type_id = $request->agreement_type_id;
-            $new_agreement->status_type_id = 1;
-            $new_agreement->save();
+            if(isset($request->uuid)){
+                $edit_agreement = Agreement::where('uuid', $request->uuid)
+                ->firstOrFail();
 
-            return response()->json('success', 200);
+                $edit_agreement->data = Crypt::encryptString(json_encode($data['agreement_data']));
+                $edit_agreement->sigex_document_id = null;
+                $edit_agreement->status_type_id = 11;
+                $edit_agreement->save();
+
+                $uuid = $request->uuid;
+
+                AgreementParty::where('agreement_id', $edit_agreement->agreement_id)
+                ->delete();
+            }
+            else{
+                $new_agreement = new Agreement();
+                $new_agreement->uuid = str_replace('-', '', (string) Str::uuid());
+                $new_agreement->initiator_id = auth()->user()->user_id;
+                $new_agreement->data = Crypt::encryptString(json_encode($data['agreement_data']));
+                $new_agreement->agreement_type_id = $request->agreement_type_id;
+                $new_agreement->status_type_id = 11;
+                $new_agreement->save();
+
+                $uuid = $new_agreement->uuid;
+            }
+
+            $agreement_id = isset($edit_agreement) ? $edit_agreement->agreement_id : $new_agreement->agreement_id;
+
+            foreach ($data['agreement_parties'] as $key => $party) {
+                $find_iin = User::where('iin', '=', $party['iin'])
+                ->first();
+
+                if(!isset($find_iin)){
+                    $new_user = new User();
+                    $new_user->iin = $party['iin'];
+                    $new_user->first_name = mb_ucwords($party['first_name']);
+                    $new_user->last_name = mb_ucwords($party['last_name']);
+                    $new_user->given_name = mb_ucwords($party['given_name']);
+                    $new_user->data = Crypt::encryptString(json_encode($party['data']));
+                    $new_user->save();
+                }
+                else{
+                    $find_iin->first_name = mb_ucwords($party['first_name']);
+                    $find_iin->last_name = mb_ucwords($party['last_name']);
+                    $find_iin->given_name = mb_ucwords($party['given_name']);
+                    $find_iin->data = Crypt::encryptString(json_encode($party['data']));
+                    $find_iin->save();
+                }
+
+                $new_party = new AgreementParty();
+                $new_party->user_id = isset($find_iin) ? $find_iin->user_id : $new_user->user_id;
+                $new_party->agreement_id = $agreement_id;
+                $new_party->save();
+
+                if($key === 0){
+                    $firstPartyUserId = $new_party->user_id;
+                }
+            }
+
+            $new_party = new AgreementParty();
+            $new_party->user_id = $data['mediator_id'];
+            $new_party->agreement_id = $agreement_id;
+            $new_party->is_mediator = 1;
+            $new_party->save();
+
+            $this->agreementService->create_agreement_file($uuid, $language->lang_id, false);
+            $this->agreementService->create_agreement_file($uuid, $language->lang_id, true);
+
+            if(isset($firstPartyUserId)){
+
+                if(isset($edit_agreement)){
+                    MediationContract::where('agreement_id', $edit_agreement->agreement_id)
+                        ->get()
+                        ->each(function ($contract) {
+                            foreach (['original', 'signed'] as $type) {
+                                $path = storage_path("app/public/agreements/contracts/{$type}/{$contract->uuid}.pdf");
+
+                                if (File::exists($path)) {
+                                    File::delete($path);
+                                }
+                            }
+                        });
+
+                    MediationContract::where('agreement_id', $edit_agreement->agreement_id)->delete();
+                }
+
+                $new_mediation_contract = new MediationContract();
+                $new_mediation_contract->uuid = str_replace('-', '', (string) Str::uuid());
+                $new_mediation_contract->data = Crypt::encryptString(json_encode($data['contract_data']));
+                $new_mediation_contract->agreement_id = $agreement_id;
+                $new_mediation_contract->status_type_id = 11;
+                $new_mediation_contract->save();
+
+                $new_party = new MediationContractParty();
+                $new_party->user_id = $firstPartyUserId;
+                $new_party->mediation_contract_id = $new_mediation_contract->mediation_contract_id;
+                $new_party->is_mediator = 0;
+                $new_party->save();
+
+                $new_party = new MediationContractParty();
+                $new_party->user_id = $data['mediator_id'];
+                $new_party->mediation_contract_id = $new_mediation_contract->mediation_contract_id;
+                $new_party->is_mediator = 1;
+                $new_party->save();
+
+                $this->agreementService->create_mediation_contract_file($agreement_id, $language->lang_id, false);
+                $this->agreementService->create_mediation_contract_file($agreement_id, $language->lang_id, true);
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'uuid' => $uuid
+            ], 200);
+        }
+    }
+
+    public function sign(Request $request)
+    {
+        try {
+            $apiUrl = Config::get('constants.sigex_api');
+
+            $agreement = Agreement::where('uuid', $request->uuid)->firstOrFail();
+            $contract = MediationContract::where('agreement_id', $agreement->agreement_id)->first();
+
+            $language = Language::where('lang_tag', $request->lang)->firstOrFail();
+
+            [$document, $parties, $model, $type] = $this->resolveContext($request->mode, $agreement, $contract);
+
+            $ids = collect($parties)->map(function ($p) {
+                return [
+                    'iin' => 'IIN' . $p->iin
+                ];
+            })->values()->toArray();
+
+            if (!$document->sigex_document_id) {
+                // 📌 Создание документа (если нет)
+                $responseData = $this->sigexRequest('POST', $apiUrl, [
+                    'title' => $document->uuid . '.pdf',
+                    'signType' => 'cms',
+                    'signature' => $request->signature,
+                    'settings' => $this->buildSettings($ids, count($parties)),
+                ]);
+
+                $documentId = $responseData['documentId'];
+
+                // 📌 Отправка файла (фикс хеша)
+                $filePath = $this->getFilePath($type, $document->uuid);
+
+                if (!File::exists($filePath)) {
+                    return response()->json(['status' => 'error', 'message' => 'File not found'], 404);
+                }
+
+                $this->sigexUpload($apiUrl, $documentId, $filePath);
+
+                $document->sigex_document_id = $documentId;
+                $document->save();
+            }
+            else {
+                // 📌 Подпись существующего документа
+                $this->sigexRequest('POST', $apiUrl . '/' . $document->sigex_document_id, [
+                    'signType' => 'cms',
+                    'signature' => $request->signature,
+                ]);
+            }
+
+            // 📌 Получение подписей
+            $responseData = $this->sigexRequest('GET', $apiUrl . '/' . $document->sigex_document_id);
+
+            $this->updateSignatures($parties, $responseData['signatures'], $model, $document);
+
+            // 📌 Генерация файла
+            $this->generateDocument($type, $agreement, $language);
+
+            return response()->json([
+                'status' => 'success',
+                'uuid' => $agreement->uuid
+            ]);
+
+        } catch (\Throwable $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function get_cms_file(Request $request){
+        $agreement = Agreement::where('uuid', $request->uuid)
+        ->firstOrFail();
+
+        $contract = MediationContract::where('agreement_id', $agreement->agreement_id)->first();
+
+        $api_url = Config::get('constants.sigex_api');
+
+        [$document, $parties, $model, $type] = $this->resolveContext($request->type, $agreement, $contract);
+
+        if($document->sigex_document_id){
+            $filePath = $this->getFilePath($type, $document->uuid);
+
+            if (!File::exists($filePath)) {
+                return response()->json(['status' => 'error', 'message' => 'File not found'], 404);
+            }
+
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/octet-stream',
+                'Content-Length' => filesize($filePath),
+            ])->withBody(
+                file_get_contents($filePath),
+                'application/octet-stream'
+            )->post($api_url.'/'.$document->sigex_document_id.'/buildEzSigner');
+
+            $responseData = $response->json();
+
+            if (!$response->successful() || isset($responseData['message'])) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => $responseData['message'] ?? 'Unknown error'
+                ], 500);
+            }
+
+            $cmsBinary = base64_decode($responseData['signature']);
+
+            return response($cmsBinary, 200, [
+                'Content-Type' => 'application/pkcs7-mime'
+            ]);
+        }
+    }
+
+    private function resolveContext($mode, $agreement, $contract)
+    {
+        if ($mode === 'agreement') {
+            return [
+                $agreement,
+                AgreementParty::leftJoin('users', 'agreement_parties.user_id', '=', 'users.user_id')
+                    ->select('agreement_parties.id', 'users.iin')
+                    ->where('agreement_parties.agreement_id', $agreement->agreement_id)
+                    ->get(),
+                AgreementParty::class,
+                'agreement'
+            ];
+        }
+
+        if ($mode === 'contract') {
+            if (!$contract) {
+                throw new \Exception('Contract not found');
+            }
+
+            return [
+                $contract,
+                MediationContractParty::leftJoin('users', 'mediation_contract_parties.user_id', '=', 'users.user_id')
+                    ->select('mediation_contract_parties.id', 'users.iin')
+                    ->where('mediation_contract_parties.mediation_contract_id', $contract->mediation_contract_id)
+                    ->get(),
+                MediationContractParty::class,
+                'contract'
+            ];
+        }
+
+        throw new \Exception('Invalid mode');
+    }
+
+    private function buildSettings($ids, $limit)
+    {
+        return [
+            'private' => false,
+            'signaturesLimit' => $limit,
+            'switchToPrivateAfterLimitReached' => false,
+            'unique' => ['iin'],
+            'signersRequirements' => $ids,
+            'strictSignersRequirements' => true,
+            'publicDuringPreregistration' => false,
+            'publicWhileLessThanSignatures' => 0,
+            'documentAccess' => [],
+            'forceArchive' => false,
+            'tempStorageAfterRegistration' => 0,
+        ];
+    }
+
+    private function sigexRequest($method, $url, $data = [])
+    {
+        $response = Http::withHeaders([
+            'Content-Type' => 'application/json',
+        ])->$method($url, $data);
+
+        $json = $response->json();
+
+        if (!$response->successful() || isset($json['message'])) {
+            throw new \Exception($json['message'] ?? 'Sigex error');
+        }
+
+        return $json;
+    }
+
+    private function sigexUpload($apiUrl, $documentId, $filePath)
+    {
+        $response = Http::withHeaders([
+            'Content-Type' => 'application/octet-stream',
+            'Content-Length' => filesize($filePath),
+        ])->withBody(
+            file_get_contents($filePath),
+            'application/octet-stream'
+        )->post("$apiUrl/$documentId/data");
+
+        $json = $response->json();
+
+        if (!$response->successful() || isset($json['message'])) {
+            throw new \Exception($json['message'] ?? 'Upload error');
+        }
+    }
+
+    private function getFilePath($type, $uuid)
+    {
+        return $type === 'agreement'
+            ? storage_path("app/public/agreements/original/$uuid.pdf")
+            : storage_path("app/public/agreements/contracts/original/$uuid.pdf");
+    }
+
+    private function updateSignatures($parties, $signatures, $model, $document)
+    {
+        $index = collect($parties)->pluck('id', 'iin')->toArray();
+
+        $signedIins = [];
+
+        foreach ($signatures as $signature) {
+            $iin = str_replace('IIN', '', $signature['userId']);
+
+            if (isset($index[$iin])) {
+                $signedIins[] = $iin;
+
+                $model::where('id', $index[$iin])->update([
+                    'sigex_sign_id' => $signature['signId'],
+                    'sigex_sign' => Crypt::encryptString(json_encode($signature)),
+                    'signed_at' => Carbon::createFromTimestamp($signature['storedAt'] / 1000, 'Asia/Almaty'),
+                ]);
+            }
+        }
+
+        $totalCount = count($index);
+        $signedCount = count(array_unique($signedIins));
+
+        if ($signedCount > 0) {
+            $document->status_type_id = 12;
+        }
+
+        if ($signedCount === $totalCount && $totalCount > 0) {
+            $document->status_type_id = 13;
+        }
+
+        $document->save();
+    }
+
+    private function generateDocument($type, $agreement, $language)
+    {
+        if ($type === 'agreement') {
+            $this->agreementService->create_agreement_file(
+                $agreement->uuid,
+                $language->lang_id,
+                true
+            );
+        } else {
+            $this->agreementService->create_mediation_contract_file(
+                $agreement->agreement_id,
+                $language->lang_id,
+                true
+            );
         }
     }
 }

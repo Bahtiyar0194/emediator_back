@@ -1,9 +1,252 @@
 <?php
 namespace App\Services;
+use App\Models\Agreement;
 use App\Models\AgreementType;
+use App\Models\Mediator;
+use App\Models\AgreementParty;
+use App\Models\MediationContract;
+use App\Models\MediationContractParty;
+
+use Illuminate\Support\Facades\Crypt;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Storage;
 
 class AgreementService
 {
+    public function create_agreement_file($uuid, $lang_id, $signed){
+        $agreement = Agreement::leftJoin('types_of_agreements', 'agreements.agreement_type_id', '=', 'types_of_agreements.agreement_type_id')
+        ->leftJoin('types_of_agreements_lang', 'types_of_agreements.agreement_type_id', '=', 'types_of_agreements_lang.agreement_type_id')
+        ->leftJoin('users as initiator', 'agreements.initiator_id', '=', 'initiator.user_id')
+        ->select(
+            'agreements.agreement_id',
+            'agreements.uuid',
+            'agreements.data',
+            'agreements.sigex_document_id',
+            'initiator.first_name as initiator_first_name',
+            'initiator.last_name as initiator_last_name',
+            'types_of_agreements.agreement_slug',
+            'types_of_agreements_lang.agreement_type_name',
+            'agreements.created_at'
+        )
+        ->where('agreements.uuid', $uuid)
+        ->where('types_of_agreements_lang.lang_id', '=', $lang_id)
+        ->distinct()
+        ->firstOrFail();
+
+        $agreement_parties = AgreementParty::leftJoin('users', 'agreement_parties.user_id', '=', 'users.user_id')
+        ->select(
+            'users.first_name',
+            'users.last_name',
+            'users.given_name',
+            'users.iin',
+            'users.data',
+            'agreement_parties.user_id',
+            'agreement_parties.is_mediator',
+            'agreement_parties.sigex_sign_id',
+            'agreement_parties.sigex_sign',
+            'agreement_parties.signed_at'
+        )
+        ->where('agreement_parties.agreement_id', $agreement->agreement_id)
+        ->orderBy('agreement_parties.id', 'asc')
+        ->get();
+
+        foreach ($agreement_parties as $key => $party) {
+            if(isset($party->data)){
+                $party->data = json_decode(Crypt::decryptString($party->data));
+            }
+
+            if($party->is_mediator === 1){
+                $mediator = Mediator::where('user_id', $party->user_id)
+                ->first();
+
+                $party->mediator = $mediator;
+            }
+        }
+        
+        $pdf = Pdf::loadView('agreements.'.$agreement->agreement_slug, [
+            'doctype' => 'agreement',
+            'document' => $agreement,
+            'data' => json_decode(Crypt::decryptString($agreement->data)),
+            'parties' => $agreement_parties,
+            'signed' => $signed
+        ])
+        ->setOption('title', $uuid.'.pdf')
+        ->setOption('author', 'EMediator.kz');
+
+        // $dompdf = $pdf->getDomPDF();
+        // $dompdf->render(); // <-- обязательно!
+        // $canvas = $dompdf->getCanvas();
+
+        // $width  = $canvas->get_width();
+        // $height = $canvas->get_height();
+
+        // $dompdf = $pdf->getDomPDF();
+        // $canvas = $dompdf->getCanvas();
+
+        // $canvas->page_script(function ($pageNumber, $pageCount, $canvas, $fontMetrics) {
+
+        //     $text = "ЧЕРНОВИК";
+        //     $font = $fontMetrics->getFont("Roboto", "Bold");
+        //     $size = 70;
+
+        //     // размеры страницы
+        //     $width  = $canvas->get_width();
+        //     $height = $canvas->get_height();
+
+        //     // центр страницы
+        //     $centerX = $width / 2;
+        //     $centerY = $height / 2;
+        //     $y = $centerY - ($size / 3);
+
+        //     // ширина текста
+        //     $textWidth = $fontMetrics->getTextWidth($text, $font, $size);
+
+        //     $canvas->set_opacity(0.2);
+
+        //     // поворачиваем ВОКРУГ центра страницы
+        //     $canvas->rotate(45, $centerX, $centerY);
+
+        //     $canvas->text(
+        //         $centerX - ($textWidth / 2),
+        //         $y,
+        //         $text,
+        //         $font,
+        //         $size,
+        //         [1, 0, 0] //красный
+        //     );
+
+        //     // вернуть обратно систему координат
+        //     $canvas->rotate(0, 0, 0);
+
+        //         // вернуть стандартную непрозрачность
+        //     $canvas->set_opacity(1);
+        // });
+
+        // $filename = sprintf(
+        //     'agreement_%s_%s.pdf',
+        //     $agreement->uuid,
+        //     $agreement->created_at->format('d-m-Y')
+        // );
+
+        $path = $signed === true ? 'signed' : 'original';
+
+        // путь относительно storage/app/public
+        $path = 'agreements/'.$path.'/'.$uuid.'.pdf';
+
+        // сохраняем файл
+        Storage::disk('public')->put($path, $pdf->output());
+    }
+
+    public function create_mediation_contract_file($agreement_id, $lang_id, $signed){
+
+        $mediation_contract = MediationContract::where('agreement_id', '=', $agreement_id)
+        ->firstOrFail();
+
+        $contract_parties = MediationContractParty::leftJoin('users', 'mediation_contract_parties.user_id', '=', 'users.user_id')
+        ->select(
+            'users.first_name',
+            'users.last_name',
+            'users.given_name',
+            'users.iin',
+            'users.data',
+            'mediation_contract_parties.user_id',
+            'mediation_contract_parties.is_mediator',
+            'mediation_contract_parties.sigex_sign_id',
+            'mediation_contract_parties.sigex_sign',
+            'mediation_contract_parties.signed_at'
+        )
+        ->where('mediation_contract_parties.mediation_contract_id', $mediation_contract->mediation_contract_id)
+        ->orderBy('mediation_contract_parties.id', 'asc')
+        ->get();
+
+        foreach ($contract_parties as $key => $party) {
+            if(isset($party->data)){
+                $party->data = json_decode(Crypt::decryptString($party->data));
+            }
+
+            if($party->is_mediator === 1){
+                $mediator = Mediator::where('user_id', $party->user_id)
+                ->first();
+
+                $party->mediator = $mediator;
+            }
+        }
+        
+        $pdf = Pdf::loadView('layouts.mediation.contract', [
+            'doctype' => 'contract',
+            'document' => $mediation_contract,
+            'data' => json_decode(Crypt::decryptString($mediation_contract->data)),
+            'parties' => $contract_parties,
+            'signed' => $signed
+        ])
+        ->setOption('title', $mediation_contract->uuid.'.pdf')
+        ->setOption('author', 'EMediator.kz');
+
+        // $dompdf = $pdf->getDomPDF();
+        // $dompdf->render(); // <-- обязательно!
+        // $canvas = $dompdf->getCanvas();
+
+        // $width  = $canvas->get_width();
+        // $height = $canvas->get_height();
+
+        // $dompdf = $pdf->getDomPDF();
+        // $canvas = $dompdf->getCanvas();
+
+        // $canvas->page_script(function ($pageNumber, $pageCount, $canvas, $fontMetrics) {
+
+        //     $text = "ЧЕРНОВИК";
+        //     $font = $fontMetrics->getFont("Roboto", "Bold");
+        //     $size = 70;
+
+        //     // размеры страницы
+        //     $width  = $canvas->get_width();
+        //     $height = $canvas->get_height();
+
+        //     // центр страницы
+        //     $centerX = $width / 2;
+        //     $centerY = $height / 2;
+        //     $y = $centerY - ($size / 3);
+
+        //     // ширина текста
+        //     $textWidth = $fontMetrics->getTextWidth($text, $font, $size);
+
+        //     $canvas->set_opacity(0.2);
+
+        //     // поворачиваем ВОКРУГ центра страницы
+        //     $canvas->rotate(45, $centerX, $centerY);
+
+        //     $canvas->text(
+        //         $centerX - ($textWidth / 2),
+        //         $y,
+        //         $text,
+        //         $font,
+        //         $size,
+        //         [1, 0, 0] //красный
+        //     );
+
+        //     // вернуть обратно систему координат
+        //     $canvas->rotate(0, 0, 0);
+
+        //         // вернуть стандартную непрозрачность
+        //     $canvas->set_opacity(1);
+        // });
+
+        // $filename = sprintf(
+        //     'agreement_%s_%s.pdf',
+        //     $agreement->uuid,
+        //     $agreement->created_at->format('d-m-Y')
+        // );
+
+        $path = $signed === true ? 'signed' : 'original';
+
+        // путь относительно storage/app/public
+        $path = 'agreements/contracts/'.$path.'/'.$mediation_contract->uuid.'.pdf';
+
+        // сохраняем файл
+        Storage::disk('public')->put($path, $pdf->output());
+    }
+
     public function get_agreement_types($language){
         $agreement_types = AgreementType::leftJoin('types_of_agreements_lang', 'types_of_agreements.agreement_type_id', '=', 'types_of_agreements_lang.agreement_type_id')
         ->where('types_of_agreements_lang.lang_id', '=', $language->lang_id)

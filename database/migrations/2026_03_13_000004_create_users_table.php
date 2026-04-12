@@ -20,20 +20,19 @@ class CreateUsersTable extends Migration
             $table->string('given_name')->nullable();
             $table->string('iin')->unique();
             $table->string('bin')->nullable();
+            $table->json('data')->nullable(); // все значения
             $table->string('email')->nullable();
+            $table->string('email_hash')->nullable();
             $table->string('phone')->nullable();
-            $table->integer('location_id')->unsigned()->nullable();
-            $table->foreign('location_id')->references('location_id')->on('locations');
+            $table->string('sms_hash')->nullable();
             $table->float('balance')->default(0);
             $table->string('avatar')->nullable();
             $table->integer('current_role_id')->unsigned()->default(4);
             $table->foreign('current_role_id')->references('role_type_id')->on('types_of_user_roles');
             $table->integer('lang_id')->unsigned()->default(2);
             $table->foreign('lang_id')->references('lang_id')->on('languages');
-            $table->integer('status_type_id')->default(3)->unsigned();
+            $table->integer('status_type_id')->default(1)->unsigned();
             $table->foreign('status_type_id')->references('status_type_id')->on('types_of_status');
-            $table->string('sms_hash')->nullable();
-            $table->string('email_hash')->nullable();
             $table->string('password')->nullable();
             $table->timestamps();
         });

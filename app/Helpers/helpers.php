@@ -2,7 +2,10 @@
 use App\Models\LegalFormType;
 use App\Models\OrganizationPostType;
 use App\Models\Location;
+use App\Models\Bank;
 use App\Models\Color;
+
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 use Carbon\Carbon;
 
@@ -13,6 +16,21 @@ function morph($n, $f1, $f2, $f5) {
     if ($n>1 && $n<5) return $f2;
     if ($n==1) return $f1;
     return $f5;
+}
+
+if(!function_exists('mb_ucwords')){
+    function mb_ucwords($string) {
+        $words = explode(' ', $string);
+
+        $words = array_map(function ($word) {
+            $first = mb_substr($word, 0, 1, 'UTF-8');
+            $rest = mb_substr($word, 1, null, 'UTF-8');
+
+            return mb_strtoupper($first, 'UTF-8') . $rest;
+        }, $words);
+
+        return implode(' ', $words);
+    }
 }
 
 if(!function_exists('getShortLegalForm')){
@@ -209,6 +227,16 @@ if (!function_exists('getColorName')) {
     }
 }
 
+if (!function_exists('getBankName')) {
+    function getBankName($bank_id, $language_id)
+    {
+        return Bank::find($bank_id)
+            ->banks_lang()
+            ->where('lang_id', $language_id)
+            ->value('bank_name');
+    }
+}
+
 if (!function_exists('monthsWord')) {
     function monthsWord(int $number): string
     {
@@ -231,4 +259,11 @@ if (!function_exists('monthsWord')) {
     }
 }
 
+if (!function_exists('generateQr')) {
+    function generateQr($text, $size, $margin) {
+        return base64_encode(
+            QrCode::format('png')->size($size)->margin($margin)->generate($text)
+        );
+    }
+}
 ?>

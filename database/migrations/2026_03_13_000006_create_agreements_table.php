@@ -20,10 +20,9 @@ class CreateAgreementsTable extends Migration
             $table->integer('initiator_id')->unsigned();
             $table->foreign('initiator_id')->references('user_id')->on('users')->onDelete('cascade');
 
-            $table->integer('mediator_id')->unsigned();
-            $table->foreign('mediator_id')->references('user_id')->on('users')->onDelete('cascade');
+            $table->json('data')->nullable(); // все значения
 
-            $table->json('data'); // все значения
+            $table->string('sigex_document_id')->nullable();
 
             $table->integer('agreement_type_id')->unsigned();
             $table->foreign('agreement_type_id')->references('agreement_type_id')->on('types_of_agreements');

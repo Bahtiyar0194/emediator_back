@@ -249,7 +249,7 @@ return [
 
             'iik'                    => 'ЖСК (IBAN)',
             'bik'                    => 'БСК',
-            'bank_name'              => 'Банктің атауы',
+            'bank_id'                => 'Банктің атауы',
 
             'car_brand'              => 'Көліктің маркасы',
             'car_model'              => 'Көліктің моделі',
@@ -263,6 +263,11 @@ return [
 
             'agreement_data.monthly_amount'         => 'Ай сайынғы төлем құны',
             'agreement_data.start_payment_date'     => 'Төлемді бастау күні',
-        ]
+        ],
+
+        'contract_data' => [
+            'prepayment' => 'Алдын ала төлем',
+            'award' => 'Сыйақы',
+        ],
     ],
 ];

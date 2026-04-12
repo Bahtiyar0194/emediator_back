@@ -267,7 +267,7 @@ return [
 
             'iik'                    => 'ИИК (IBAN)',
             'bik'                    => 'БИК',
-            'bank_name'              => 'Название банка',
+            'bank_id'                => 'Название банка',
 
             'car_brand'              => 'Марка ТС',
             'car_model'              => 'Модель ТС',
@@ -281,6 +281,11 @@ return [
 
             'monthly_amount'         => 'Сумма ежемесячного платежа',
             'start_payment_date'     => 'Дата начала платежа',
-        ]
+        ],
+
+        'contract_data' => [
+            'prepayment'             => 'Предоплата',
+            'award'                  => 'Вознаграждение',
+        ],
     ], 
 ];

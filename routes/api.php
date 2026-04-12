@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\UserController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\AgreementController;
 /*
@@ -46,6 +47,14 @@ Route::group([
     });
 
     Route::group([
+        'prefix' => 'users'
+    ], function ($router) {
+        Route::group(['middleware' => ['auth:sanctum']], function () {
+            Route::get('/get/{iin}', [UserController::class, 'get']);
+        });
+    });
+
+    Route::group([
         'prefix' => 'locations'
     ], function ($router) {
         Route::get('/get', [LocationController::class, 'get']);
@@ -57,10 +66,13 @@ Route::group([
         Route::group(['middleware' => ['auth:sanctum']], function () {
             Route::get('/get_attributes', [AgreementController::class, 'get_attributes']);
             Route::post('/get', [AgreementController::class, 'get_agreements']);
-            Route::post('/create', [AgreementController::class, 'create']);
+            Route::post('/save', [AgreementController::class, 'save']);
+            Route::post('/sign/{uuid}', [AgreementController::class, 'sign']);
+            Route::get('/sign/verify/{uuid}', [AgreementController::class, 'sign_verify']);
             Route::post('/get/{uuid}', [AgreementController::class, 'get_agreement']);
+            Route::get('/cms/{type}/{uuid}', [AgreementController::class, 'get_cms_file']);
         });
 
-        Route::get('/get_file/{uuid}', [AgreementController::class, 'get_agreement_file']);
+        Route::get('/get_file/{document}/{type}/{uuid}', [AgreementController::class, 'get_file']);
     });
 });

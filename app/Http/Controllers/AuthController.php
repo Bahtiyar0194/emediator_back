@@ -8,6 +8,7 @@ use Config;
 use Validator;
 use Illuminate\Support\Facades\Auth;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
+use Illuminate\Support\Facades\Crypt;
 
 use App\Models\User;
 use App\Models\UserRole;
@@ -19,6 +20,7 @@ class AuthController extends Controller
 
     public function get_token(Request $request){
         $api_url = Config::get('constants.sigex_api').'/auth';
+
         $client = new Client([
             'headers' => ['Content-Type' => 'application/json']
         ]);
@@ -34,13 +36,14 @@ class AuthController extends Controller
 
     public function get_qr(Request $request){
         $api_url = Config::get('constants.sigex_api').'/egovQr';
+
         $client = new Client([
             'headers' => ['Content-Type' => 'application/json']
         ]);
 
         $response = $client->post($api_url,
             ['body' => '{
-                "description": "Аутентификация"
+                "description": "Аутентификация E-mediator.kz"
             }']
         )->getBody()->getContents();
 
@@ -49,7 +52,8 @@ class AuthController extends Controller
         $qrId = str_replace('https://sigex.kz/api/egovQr/', '', $response->signURL);
 
         //Generates a QrCode with an image centered in the middle.  The inserted image takes up 30% of the QrCode.
-        $qrCode = base64_encode(QrCode::format('png')->size(400)->merge('https://i.pinimg.com/originals/5b/2d/bb/5b2dbbc4c2f3b7db7cad60cd89997e30.png', .2, true)->generate('mobileSign:'.Config::get('constants.sigex_api').'/egovQr/egov/'.$qrId));
+        //$qrCode = base64_encode(QrCode::format('png')->size(400)->merge('https://i.pinimg.com/originals/5b/2d/bb/5b2dbbc4c2f3b7db7cad60cd89997e30.png', .2, true)->generate('mobileSign:'.Config::get('constants.sigex_api').'/egovQr/egov/'.$qrId));
+        $qrCode = base64_encode(QrCode::format('png')->size(400)->generate('mobileSign:'.Config::get('constants.sigex_api').'/egovQr/egov/'.$qrId));
 
         $response->qrCode = $qrCode;
 
@@ -91,12 +95,12 @@ class AuthController extends Controller
                         if(strpos($subject_item, 'CN=') !== false){
                             $cn = explode(' ', str_replace('CN=', '', $subject_item));
 
-                            $new_user->first_name = $cn[1];
-                            $new_user->last_name = $cn[0];
+                            $new_user->first_name = mb_ucwords($cn[1]);
+                            $new_user->last_name = mb_ucwords($cn[0]);
                         }  
 
                         if(strpos($subject_item, 'GIVENNAME=') !== false){
-                            $new_user->given_name = str_replace('GIVENNAME=', '', $subject_item);
+                            $new_user->given_name = mb_ucwords(str_replace('GIVENNAME=', '', $subject_item));
                         }  
                     }
 
@@ -135,6 +139,12 @@ class AuthController extends Controller
 
     public function me(Request $request){
         $user = auth()->user();
+
+        if(isset($user)){
+            if(isset($user->data)){
+                $user->data = json_decode(Crypt::decryptString($user->data));
+            }
+        }
 
         $language = Language::where('lang_id', '=', $user->lang_id)->first();
 
