@@ -421,7 +421,7 @@ class AgreementController extends Controller
                 'preview' => $this->agreementService->create_agreement_preview($request->agreement_parties, $request->mediator_id)
             ], 200);
         }
-        elseif($request->step === 3){
+        else{
             $rules = [
                 'agreement_type_id' => 'required|numeric',
                 'custom_template.name' => "nullable|required_if:custom_template.save,true",
@@ -516,18 +516,11 @@ class AgreementController extends Controller
                 return response()->json($validator->errors(), 422);
             }
 
-            return response()->json([
-                'step' => $request->step
-            ], 200);
-        }
-        else{
             $data = collect($request->except(['lang', 'step']))
             ->map(function ($v){
                 return is_string($v) ? strip_tags($v) : $v;
             })
             ->toArray();
-
-            $agreement_type = AgreementType::findOrFail($request->agreement_type_id);
 
             $custom_agreement_types = ['arbitary', 'custom'];
 
