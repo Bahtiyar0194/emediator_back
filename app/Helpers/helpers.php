@@ -18,15 +18,34 @@ function morph($n, $f1, $f2, $f5) {
     return $f5;
 }
 
-if(!function_exists('mb_ucwords')){
-    function mb_ucwords($string) {
-        $words = explode(' ', $string);
+if (!function_exists('mb_ucwords')) {
+    function mb_ucwords(string $string, string $encoding = 'UTF-8'): string
+    {
+        $string = trim($string);
 
-        $words = array_map(function ($word) {
-            $first = mb_substr($word, 0, 1, 'UTF-8');
-            $rest = mb_substr($word, 1, null, 'UTF-8');
+        if ($string === '') {
+            return '';
+        }
 
-            return mb_strtoupper($first, 'UTF-8') . $rest;
+        // Разбиваем по любым пробельным символам
+        $words = preg_split('/\s+/u', $string);
+
+        $words = array_map(function ($word) use ($encoding) {
+
+            // Обработка дефисов внутри слова (иван-иванов → Иван-Иванов)
+            $parts = explode('-', $word);
+
+            $parts = array_map(function ($part) use ($encoding) {
+                $part = mb_strtolower($part, $encoding);
+
+                $first = mb_substr($part, 0, 1, $encoding);
+                $rest  = mb_substr($part, 1, null, $encoding);
+
+                return mb_strtoupper($first, $encoding) . $rest;
+            }, $parts);
+
+            return implode('-', $parts);
+
         }, $words);
 
         return implode(' ', $words);
