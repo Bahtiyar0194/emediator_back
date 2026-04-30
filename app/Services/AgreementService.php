@@ -2,8 +2,10 @@
 namespace App\Services;
 use App\Models\Agreement;
 use App\Models\AgreementType;
+use App\Models\User;
 use App\Models\Mediator;
 use App\Models\AgreementParty;
+use App\Models\AgreementTypicalPoint;
 use App\Models\MediationContract;
 use App\Models\MediationContractParty;
 
@@ -14,6 +16,50 @@ use Storage;
 
 class AgreementService
 {
+    public function create_agreement_preview($parties, $mediator_id){
+        
+        foreach ($parties as &$party) {
+            $party['is_mediator'] = 0;
+        }
+
+        unset($party); // важно!
+
+        $mediator = User::select(
+            'iin',
+            'first_name',
+            'last_name',
+            'given_name',
+            'user_id'
+        )
+        ->where('user_id', $mediator_id)
+        ->firstOrFail();
+
+        $mediator_data = Mediator::where('user_id', $mediator->user_id)
+        ->first();
+
+        $mediatorObj = (object) [
+            'iin' => $mediator->iin,
+            'first_name' => $mediator->first_name,
+            'last_name' => $mediator->last_name,
+            'given_name' => $mediator->given_name,
+            'user_id' => $mediator->user_id,
+            'mediator' => $mediator_data,
+            'is_mediator' => 1,
+        ];
+
+        $parties[] = $mediatorObj;
+
+        return view('layouts.parts.header', [
+            'doctype' => 'agreement',
+            'document' => (object) [
+                'updated_at' => now()
+            ],
+            // 'data' => json_decode(json_encode($agreement_data)),
+            'parties' => json_decode(json_encode($parties)),
+            // 'signed' => true
+        ])->render();
+    }
+
     public function create_agreement_file($uuid, $lang_id, $signed){
         $agreement = Agreement::leftJoin('types_of_agreements', 'agreements.agreement_type_id', '=', 'types_of_agreements.agreement_type_id')
         ->leftJoin('types_of_agreements_lang', 'types_of_agreements.agreement_type_id', '=', 'types_of_agreements_lang.agreement_type_id')
@@ -27,7 +73,8 @@ class AgreementService
             'initiator.last_name as initiator_last_name',
             'types_of_agreements.agreement_slug',
             'types_of_agreements_lang.agreement_type_name',
-            'agreements.created_at'
+            'agreements.created_at',
+            'agreements.updated_at'
         )
         ->where('agreements.uuid', $uuid)
         ->where('types_of_agreements_lang.lang_id', '=', $lang_id)
@@ -63,12 +110,21 @@ class AgreementService
                 $party->mediator = $mediator;
             }
         }
+
+        $typical_points = AgreementTypicalPoint::where('show_status_id', 1)
+        ->orderBy('sort_num', 'asc')
+        ->get();
+
+        $custom_agreement_types = ['arbitary', 'custom'];
+
+        $agreement_slug = in_array($agreement->agreement_slug, $custom_agreement_types) ? 'arbitary_custom' : $agreement->agreement_slug;
         
-        $pdf = Pdf::loadView('agreements.'.$agreement->agreement_slug, [
+        $pdf = Pdf::loadView('agreements.'.$agreement_slug, [
             'doctype' => 'agreement',
             'document' => $agreement,
             'data' => json_decode(Crypt::decryptString($agreement->data)),
             'parties' => $agreement_parties,
+            'points' => $typical_points,
             'signed' => $signed
         ])
         ->setOption('title', $uuid.'.pdf')

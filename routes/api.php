@@ -65,6 +65,7 @@ Route::group([
     ], function ($router) {
         Route::group(['middleware' => ['auth:sanctum']], function () {
             Route::get('/get_attributes', [AgreementController::class, 'get_attributes']);
+            Route::get('/get_my_templates', [AgreementController::class, 'get_my_templates']);
             Route::post('/get', [AgreementController::class, 'get_agreements']);
             Route::post('/save', [AgreementController::class, 'save']);
             Route::post('/sign/{uuid}', [AgreementController::class, 'sign']);

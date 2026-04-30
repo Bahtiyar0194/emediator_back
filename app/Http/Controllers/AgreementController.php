@@ -11,7 +11,9 @@ use App\Models\Bank;
 use App\Models\Color;
 use App\Models\User;
 use App\Models\AgreementParty;
+use App\Models\AgreementTypicalPoint;
 use App\Models\Mediator;
+use App\Models\CustomAgreementTemplate;
 
 use App\Models\MediationContract;
 use App\Models\MediationContractParty;
@@ -91,6 +93,10 @@ class AgreementController extends Controller
         )
         ->get();
 
+        $typical_points = AgreementTypicalPoint::where('show_status_id', 1)
+        ->orderBy('sort_num', 'asc')
+        ->get();
+
         $locations = $this->locationService->get_locations($language);
         $agreement_types = $this->agreementService->get_agreement_types($language);
 
@@ -103,8 +109,25 @@ class AgreementController extends Controller
         $attributes->colors = $colors;
         $attributes->banks = $banks;
         $attributes->mediators = $mediators;
+        $attributes->typical_points = $typical_points;
 
         return response()->json($attributes, 200);
+    }
+
+    public function get_my_templates(Request $request){
+        $auth_user = auth()->user();
+
+        $templates = CustomAgreementTemplate::where('user_id', $auth_user->user_id)
+        ->where('status_type_id', 1)
+        ->get();
+
+        foreach ($templates as $key => $template) {
+            if(isset($template->data)){
+                $template->data = json_decode(Crypt::decryptString($template->data));
+            }
+        }
+
+        return response()->json($templates, 200);
     }
 
     public function get_agreements(Request $request){
@@ -140,12 +163,18 @@ class AgreementController extends Controller
                     ->where('contract_status_lang.lang_id', $language->lang_id);
             })
 
+            // ✅ кастомный шаблон
+            ->leftJoin('custom_agreement_templates', 'agreements.custom_template_id', '=', 'custom_agreement_templates.template_id')
+
             ->select(
                 'agreements.uuid',
+                'agreements.custom_template_id',
                 'initiator.first_name as initiator_first_name',
                 'initiator.last_name as initiator_last_name',
                 'types_of_agreements_lang.agreement_type_name',
                 'agreements.created_at',
+                'agreements.custom_template_id',
+                'custom_agreement_templates.template_name',
 
                 // 👇 статусы
                 'agreements.status_type_id as agreement_status_id',
@@ -184,12 +213,16 @@ class AgreementController extends Controller
         $agreement = Agreement::leftJoin('types_of_agreements', 'agreements.agreement_type_id', '=', 'types_of_agreements.agreement_type_id')
         ->leftJoin('types_of_agreements_lang', 'types_of_agreements.agreement_type_id', '=', 'types_of_agreements_lang.agreement_type_id')
         ->leftJoin('users as initiator', 'agreements.initiator_id', '=', 'initiator.user_id')
+        // ✅ кастомный шаблон
+        ->leftJoin('custom_agreement_templates', 'agreements.custom_template_id', '=', 'custom_agreement_templates.template_id')
         ->select(
             'agreements.agreement_id',
             'agreements.agreement_type_id',
+            'agreements.custom_template_id',
             'agreements.uuid',
             'agreements.data',
             'agreements.sigex_document_id',
+            'custom_agreement_templates.template_name',
             'initiator.first_name as initiator_first_name',
             'initiator.last_name as initiator_last_name',
             'types_of_agreements.agreement_slug',
@@ -201,7 +234,14 @@ class AgreementController extends Controller
         ->distinct()
         ->firstOrFail();
 
-        $agreement->data = json_decode(Crypt::decryptString($agreement->data));
+        $custom_agreement_types = ['arbitary', 'custom'];
+
+        if(in_array($agreement->agreement_slug, $custom_agreement_types)){
+            $agreement->points = json_decode(Crypt::decryptString($agreement->data));
+        }
+        else{
+            $agreement->data = json_decode(Crypt::decryptString($agreement->data));
+        }
 
         $agreement_parties = AgreementParty::leftJoin('users', 'agreement_parties.user_id', '=', 'users.user_id')
         ->select(
@@ -312,44 +352,44 @@ class AgreementController extends Controller
     public function save(Request $request){
         $language = Language::where('lang_tag', '=', $request->lang)->first();
 
+        app()->setLocale($request->lang);
+
         $rules = [];
 
-        if (in_array($request->step, [1, 2])) {
+        if ($request->step === 1) {
 
-            $index = $request->step - 1;
+            foreach ($request['agreement_parties'] as $index => $party) {
+                $rules = array_merge($rules, [
+                    "agreement_parties.$index.data.is_legal" => 'required|boolean',
+                    "agreement_parties.$index.first_name" => 'required|string',
+                    "agreement_parties.$index.last_name" => 'required|string',
+                    "agreement_parties.$index.iin" => 'required|string|size:12',
+                    "agreement_parties.$index.data.location_id" => 'required|numeric',
+                    "agreement_parties.$index.data.street" => 'required|string|between:2,100',
+                    "agreement_parties.$index.data.house" => 'required|between:1,10',
 
-            $rules = [
-                "agreement_parties.$index.data.is_legal" => 'required|boolean',
-                "agreement_parties.$index.first_name" => 'required|string',
-                "agreement_parties.$index.last_name" => 'required|string',
-                "agreement_parties.$index.iin" => 'required|string|size:12',
-                "agreement_parties.$index.data.location_id" => 'required|numeric',
-                "agreement_parties.$index.data.street" => 'required|string|between:2,100',
-                "agreement_parties.$index.data.house" => 'required|between:1,10',
+                    "agreement_parties.$index.data.legal_form_id" =>
+                        "nullable|required_if:agreement_parties.$index.data.is_legal,true|numeric",
 
-                "agreement_parties.$index.data.legal_form_id" =>
-                    "nullable|required_if:agreement_parties.$index.data.is_legal,true|numeric",
+                    "agreement_parties.$index.data.post_type_id" =>
+                        "nullable|required_if:agreement_parties.$index.data.is_legal,true|numeric",
 
-                "agreement_parties.$index.data.post_type_id" =>
-                    "nullable|required_if:agreement_parties.$index.data.is_legal,true|numeric",
+                    "agreement_parties.$index.data.bin" =>
+                        "nullable|required_if:agreement_parties.$index.data.is_legal,true|string|size:12",
 
-                "agreement_parties.$index.data.bin" =>
-                    "nullable|required_if:agreement_parties.$index.data.is_legal,true|string|size:12",
+                    "agreement_parties.$index.data.company_name" =>
+                        "nullable|required_if:agreement_parties.$index.data.is_legal,true|string",
 
-                "agreement_parties.$index.data.company_name" =>
-                    "nullable|required_if:agreement_parties.$index.data.is_legal,true|string",
+                    "agreement_parties.$index.data.company_location_id" =>
+                        "nullable|required_if:agreement_parties.$index.data.is_legal,true|numeric",
 
-                "agreement_parties.$index.data.company_location_id" =>
-                    "nullable|required_if:agreement_parties.$index.data.is_legal,true|numeric",
+                    "agreement_parties.$index.data.company_street" =>
+                        "nullable|required_if:agreement_parties.$index.data.is_legal,true|string|between:2,100",
 
-                "agreement_parties.$index.data.company_street" =>
-                    "nullable|required_if:agreement_parties.$index.data.is_legal,true|string|between:2,100",
-
-                "agreement_parties.$index.data.company_building" =>
-                    "nullable|required_if:agreement_parties.$index.data.is_legal,true|between:1,10",
-
-                'step' => 'required|numeric',
-            ];
+                    "agreement_parties.$index.data.company_building" =>
+                        "nullable|required_if:agreement_parties.$index.data.is_legal,true|between:1,10",
+                ]);
+            }
 
             $validator = Validator::make($request->all(), $rules);
 
@@ -361,10 +401,30 @@ class AgreementController extends Controller
                 'step' => $request->step
             ], 200);
         }
-        elseif($request->step === 3){
+        elseif($request->step === 2){
 
             $rules = [
+                'mediator_id' => 'required|numeric',
+                'contract_data.prepayment' => 'required|string',
+                'contract_data.award' => 'required|string',
+                'step' => 'required|numeric',
+            ];
+
+            $validator = Validator::make($request->all(), $rules);
+
+            if ($validator->fails()) {
+                return response()->json($validator->errors(), 422);
+            }
+
+            return response()->json([
+                'step' => $request->step,
+                'preview' => $this->agreementService->create_agreement_preview($request->agreement_parties, $request->mediator_id)
+            ], 200);
+        }
+        elseif($request->step === 3){
+            $rules = [
                 'agreement_type_id' => 'required|numeric',
+                'custom_template.name' => "nullable|required_if:custom_template.save,true",
                 'step' => 'required|numeric',
             ];
 
@@ -435,6 +495,10 @@ class AgreementController extends Controller
                         $agreementRules['children.*.birth_date'] = 'required|date';
                         $agreementRules['children.*.residential_address'] = 'required|numeric';
                         break;
+
+                    case 'custom' :
+                        $rules["custom_template.id"] = 'nullable||required_if:custom_template.new,false|numeric';
+                        break;
                     
                     default:
                         # code...
@@ -457,35 +521,51 @@ class AgreementController extends Controller
             ], 200);
         }
         else{
-
-            $index = $request->step - 1;
-
-            $rules = [
-                'mediator_id' => 'required|numeric',
-                'contract_data.prepayment' => 'required|string',
-                'contract_data.award' => 'required|string',
-                'step' => 'required|numeric',
-            ];
-
-            $validator = Validator::make($request->all(), $rules);
-
-            if ($validator->fails()) {
-                return response()->json($validator->errors(), 422);
-            }
-
             $data = collect($request->except(['lang', 'step']))
             ->map(function ($v){
                 return is_string($v) ? strip_tags($v) : $v;
             })
             ->toArray();
 
+            $agreement_type = AgreementType::findOrFail($request->agreement_type_id);
+
+            $custom_agreement_types = ['arbitary', 'custom'];
+
+            $agreement_data = Crypt::encryptString(json_encode(in_array($agreement_type->agreement_slug, $custom_agreement_types) ? $data['points'] : $data['agreement_data']));
+
             if(isset($request->uuid)){
                 $edit_agreement = Agreement::where('uuid', $request->uuid)
                 ->firstOrFail();
 
-                $edit_agreement->data = Crypt::encryptString(json_encode($data['agreement_data']));
+                $edit_agreement->data = $agreement_data;
                 $edit_agreement->sigex_document_id = null;
                 $edit_agreement->status_type_id = 11;
+
+                if(isset($request->custom_template)){
+                    $custom_template = $request->custom_template;
+
+                    if(isset($custom_template['id'])){
+                        $search_template = CustomAgreementTemplate::findOrFail($custom_template['id']);
+                        
+                        if($custom_template['save'] === true){
+                            $search_template->template_name = $custom_template['name'];
+                            $search_template->data = $agreement_data;
+                            $search_template->save();
+                        }
+
+                        $edit_agreement->custom_template_id = $search_template->template_id;
+                    }
+                    elseif ($custom_template['save'] === true) {
+                        $new_custom_agreement_template = new CustomAgreementTemplate();
+                        $new_custom_agreement_template->template_name = $custom_template['name'];
+                        $new_custom_agreement_template->user_id = auth()->user()->user_id;
+                        $new_custom_agreement_template->data = $agreement_data;
+                        $new_custom_agreement_template->save();
+
+                        $edit_agreement->custom_template_id = $new_custom_agreement_template->template_id;
+                    }
+                }
+
                 $edit_agreement->save();
 
                 $uuid = $request->uuid;
@@ -497,11 +577,36 @@ class AgreementController extends Controller
                 $new_agreement = new Agreement();
                 $new_agreement->uuid = str_replace('-', '', (string) Str::uuid());
                 $new_agreement->initiator_id = auth()->user()->user_id;
-                $new_agreement->data = Crypt::encryptString(json_encode($data['agreement_data']));
+                $new_agreement->data = $agreement_data;
                 $new_agreement->agreement_type_id = $request->agreement_type_id;
                 $new_agreement->status_type_id = 11;
-                $new_agreement->save();
 
+                if(isset($request->custom_template)){
+                    $custom_template = $request->custom_template;
+
+                    if(isset($custom_template['id'])){
+                        $search_template = CustomAgreementTemplate::findOrFail($custom_template['id']);
+
+                        if($custom_template['save'] === true){
+                            $search_template->template_name = $custom_template['name'];
+                            $search_template->data = $agreement_data;
+                            $search_template->save();
+                        }
+
+                        $new_agreement->custom_template_id = $search_template->template_id;
+                    }
+                    elseif ($custom_template['save'] === true) {
+                        $new_custom_agreement_template = new CustomAgreementTemplate();
+                        $new_custom_agreement_template->template_name = $custom_template['name'];
+                        $new_custom_agreement_template->user_id = auth()->user()->user_id;
+                        $new_custom_agreement_template->data = $agreement_data;
+                        $new_custom_agreement_template->save();
+
+                        $new_agreement->custom_template_id = $new_custom_agreement_template->template_id;
+                    }
+                }
+
+                $new_agreement->save();
                 $uuid = $new_agreement->uuid;
             }
 

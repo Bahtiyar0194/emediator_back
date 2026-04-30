@@ -269,5 +269,9 @@ return [
             'prepayment' => 'Алдын ала төлем',
             'award' => 'Сыйақы',
         ],
+
+        'custom_template' => [
+            'name' => 'Үлгінің атауы',
+        ],
     ],
 ];
