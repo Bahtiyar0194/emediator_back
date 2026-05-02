@@ -41,11 +41,17 @@ class AuthController extends Controller
             'headers' => ['Content-Type' => 'application/json']
         ]);
 
-        $response = $client->post($api_url,
-            ['body' => '{
-                "description": "Аутентификация E-mediator.kz"
-            }']
-        )->getBody()->getContents();
+        $response = $client->post($api_url, [
+            'body' => json_encode([
+                'description' => 'Authentication Emediator.kz',
+                'whenDone' => [
+                    'backUrl' => env('FRONTEND_URL') . '/dashboard'
+                ]
+            ]),
+            'headers' => [
+                'Content-Type' => 'application/json'
+            ]
+        ])->getBody()->getContents();
 
         $response = json_decode($response);
 
