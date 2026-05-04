@@ -531,6 +531,7 @@ class AgreementController extends Controller
                 ->firstOrFail();
 
                 $edit_agreement->data = $agreement_data;
+                $edit_agreement->agreement_type_id = $request->agreement_type_id;
                 $edit_agreement->sigex_document_id = null;
                 $edit_agreement->status_type_id = 11;
 
@@ -541,7 +542,7 @@ class AgreementController extends Controller
                         $search_template = CustomAgreementTemplate::findOrFail($custom_template['id']);
                         
                         if($custom_template['save'] === true){
-                            $search_template->template_name = $custom_template['name'];
+                            $search_template->template_name = mb_ucwords($custom_template['name']);
                             $search_template->data = $agreement_data;
                             $search_template->save();
                         }
@@ -550,12 +551,13 @@ class AgreementController extends Controller
                     }
                     elseif ($custom_template['save'] === true) {
                         $new_custom_agreement_template = new CustomAgreementTemplate();
-                        $new_custom_agreement_template->template_name = $custom_template['name'];
+                        $new_custom_agreement_template->template_name = mb_ucwords($custom_template['name']);
                         $new_custom_agreement_template->user_id = auth()->user()->user_id;
                         $new_custom_agreement_template->data = $agreement_data;
                         $new_custom_agreement_template->save();
 
                         $edit_agreement->custom_template_id = $new_custom_agreement_template->template_id;
+                        $edit_agreement->agreement_type_id = 28; //Сразу превращаем в custom
                     }
                 }
 
@@ -581,7 +583,7 @@ class AgreementController extends Controller
                         $search_template = CustomAgreementTemplate::findOrFail($custom_template['id']);
 
                         if($custom_template['save'] === true){
-                            $search_template->template_name = $custom_template['name'];
+                            $search_template->template_name = mb_ucwords($custom_template['name']);
                             $search_template->data = $agreement_data;
                             $search_template->save();
                         }
@@ -590,12 +592,13 @@ class AgreementController extends Controller
                     }
                     elseif ($custom_template['save'] === true) {
                         $new_custom_agreement_template = new CustomAgreementTemplate();
-                        $new_custom_agreement_template->template_name = $custom_template['name'];
+                        $new_custom_agreement_template->template_name = mb_ucwords($custom_template['name']);
                         $new_custom_agreement_template->user_id = auth()->user()->user_id;
                         $new_custom_agreement_template->data = $agreement_data;
                         $new_custom_agreement_template->save();
 
                         $new_agreement->custom_template_id = $new_custom_agreement_template->template_id;
+                        $new_agreement->agreement_type_id = 28; //Сразу превращаем в custom
                     }
                 }
 

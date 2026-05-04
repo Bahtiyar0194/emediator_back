@@ -83,6 +83,12 @@ class AuthController extends Controller
         $response = Http::withHeaders([
             'Content-Type' => 'application/json',
         ])->post($api_url, $request->sigex);
+        
+        info('Login response', [
+            'status' => $response->status(),
+            'body' => $response->body(),
+            'json' => $response->json(),
+        ]);
 
         if ($response->successful()) {
             $response = json_decode($response);
