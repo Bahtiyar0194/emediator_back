@@ -51,6 +51,7 @@
             p{
                 margin-bottom: 5px !important;
                 margin-top: 5px !important;
+                text-indent: 3ch !important;
             }
 
             table.bordered {

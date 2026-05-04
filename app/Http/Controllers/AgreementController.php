@@ -366,7 +366,7 @@ class AgreementController extends Controller
                     "agreement_parties.$index.iin" => 'required|string|size:12',
                     "agreement_parties.$index.data.location_id" => 'required|numeric',
                     "agreement_parties.$index.data.street" => 'required|string|between:2,100',
-                    "agreement_parties.$index.data.house" => 'required|between:1,10',
+                    "agreement_parties.$index.data.house" => 'required|regex:/^\d+(\/\d+)?$/',
 
                     "agreement_parties.$index.data.legal_form_id" =>
                         "nullable|required_if:agreement_parties.$index.data.is_legal,true|numeric",
