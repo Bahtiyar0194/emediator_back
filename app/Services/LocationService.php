@@ -17,6 +17,7 @@ class LocationService
             'locations_lang.location_name',
             'types_of_locations_lang.location_type_name'
         )
+        ->orderBy('locations.location_id', 'asc')
         ->orderBy('locations.location_type_id', 'desc')
         ->orderBy('locations_lang.location_name', 'desc')
         ->get();
