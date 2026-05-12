@@ -23,7 +23,7 @@
                             @if(isset($party->sigex_sign))
                                 <img src="data:image/png;base64, {!! generateQr(env('FRONTEND_URL').'/agreement/signs/'.$doctype.'/'.$document->uuid.'?sign_id='.$party->sigex_sign_id, 120, 0) !!}">
                             @else
-                                <b style="color: red">Подпись ожидается</b>
+                                <b style="color: red">Не подписано</b>
                             @endif
                         </td>
                     @endforeach

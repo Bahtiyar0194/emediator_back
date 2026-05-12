@@ -364,9 +364,13 @@ class AgreementController extends Controller
                     "agreement_parties.$index.first_name" => 'required|string',
                     "agreement_parties.$index.last_name" => 'required|string',
                     "agreement_parties.$index.iin" => 'required|string|size:12',
-                    "agreement_parties.$index.data.location_id" => 'required|numeric',
-                    "agreement_parties.$index.data.street" => 'required|string|between:2,100',
-                    "agreement_parties.$index.data.house" => 'required|regex:/^\d+(\/\d+)?$/',
+                    "agreement_parties.$index.data.phone" => 'required|regex:/^((?!_).)*$/s',
+                    "agreement_parties.$index.data.location.id" => 'required|numeric',
+                    "agreement_parties.$index.data.location.street" => 'required|string|between:2,100',
+                    "agreement_parties.$index.data.location.house" => 'required|regex:/^\d+(\/\d+)?$/',
+
+                    "agreement_parties.$index.data.location.village" =>
+                        "nullable|required_if:agreement_parties.$index.data.location.is_district,true|string",
 
                     "agreement_parties.$index.data.legal_form_id" =>
                         "nullable|required_if:agreement_parties.$index.data.is_legal,true|numeric",
@@ -380,13 +384,16 @@ class AgreementController extends Controller
                     "agreement_parties.$index.data.company_name" =>
                         "nullable|required_if:agreement_parties.$index.data.is_legal,true|string",
 
-                    "agreement_parties.$index.data.company_location_id" =>
+                    "agreement_parties.$index.data.company_location.id" =>
                         "nullable|required_if:agreement_parties.$index.data.is_legal,true|numeric",
 
-                    "agreement_parties.$index.data.company_street" =>
+                    "agreement_parties.$index.data.company_location.village" =>
+                        "nullable|required_if:agreement_parties.$index.data.company_location.is_district,true|string",
+
+                    "agreement_parties.$index.data.company_location.street" =>
                         "nullable|required_if:agreement_parties.$index.data.is_legal,true|string|between:2,100",
 
-                    "agreement_parties.$index.data.company_building" =>
+                    "agreement_parties.$index.data.company_location.building" =>
                         "nullable|required_if:agreement_parties.$index.data.is_legal,true|between:1,10",
                 ]);
             }

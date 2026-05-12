@@ -15,11 +15,12 @@ class LocationService
             'locations.location_id',
             'locations.parent_id',
             'locations_lang.location_name',
+            'types_of_locations.location_type_slug',
             'types_of_locations_lang.location_type_name'
         )
         ->orderBy('locations.location_type_id', 'desc')
         ->orderBy('locations.location_id', 'asc')
-        ->orderBy('locations_lang.location_name', 'desc')
+        ->orderBy('locations_lang.location_name', 'asc')
         ->get();
 
         $locationTree = $this->buildTree($locations);
@@ -37,6 +38,7 @@ class LocationService
                 $tree[] = [
                     'location_id' => $location->location_id,
                     'location_name' => $location->location_name,
+                    'location_type_slug' => $location->location_type_slug,
                     'location_type_name' => $location->location_type_name,
                     'childs' => $children,
                     'level' => $level

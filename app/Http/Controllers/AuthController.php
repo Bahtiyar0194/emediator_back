@@ -61,7 +61,7 @@ class AuthController extends Controller
         //$qrCode = base64_encode(QrCode::format('png')->size(400)->merge('https://i.pinimg.com/originals/5b/2d/bb/5b2dbbc4c2f3b7db7cad60cd89997e30.png', .2, true)->generate('mobileSign:'.Config::get('constants.sigex_api').'/egovQr/egov/'.$qrId));
         $qrCode = base64_encode(QrCode::format('png')->size(400)->generate('mobileSign:'.Config::get('constants.sigex_api').'/egovQr/egov/'.$qrId));
 
-        $response->qrCode = $qrCode;
+        //$response->qrCode = $qrCode;
 
         return response()->json($response, 200);
     }
