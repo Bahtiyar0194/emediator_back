@@ -767,9 +767,10 @@ class AgreementController extends Controller
 
         } catch (\Throwable $e) {
             return response()->json([
-                'status' => 'error1',
+                'status' => 'error',
+                'sigex_error' => true,
                 'message' => $e->getMessage()
-            ], 500);
+            ], 400);
         }
     }
 
@@ -804,7 +805,7 @@ class AgreementController extends Controller
                 return response()->json([
                     'status' => 'error',
                     'message' => $responseData['message'] ?? 'Unknown error'
-                ], 500);
+                ], 400);
             }
 
             $cmsBinary = base64_decode($responseData['signature']);
