@@ -767,7 +767,7 @@ class AgreementController extends Controller
 
         } catch (\Throwable $e) {
             return response()->json([
-                'status' => 'error',
+                'status' => 'error1',
                 'message' => $e->getMessage()
             ], 500);
         }

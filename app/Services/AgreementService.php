@@ -111,14 +111,6 @@ class AgreementService
             }
         }
 
-        if($signed === true){
-            info('Sign document', [
-                'parties' => $agreement_parties
-            ]);
-        }
-
-
-
         $typical_points = AgreementTypicalPoint::where('show_status_id', 1)
         ->orderBy('sort_num', 'asc')
         ->get();
