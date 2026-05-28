@@ -50,14 +50,12 @@ Route::group([
         'prefix' => 'users'
     ], function ($router) {
         Route::group(['middleware' => ['auth:sanctum']], function () {
-            Route::get('/get/{iin}', [UserController::class, 'get']);
+            Route::get('/get/{iin}', [UserController::class, 'get_by_iin']);
+            Route::post('/get', [UserController::class, 'get']);
+            Route::post('/get/{user_id}', [UserController::class, 'get_user']);
+            Route::post('/get_user_attributes', [UserController::class, 'get_user_attributes']);
+            Route::post('/update', [UserController::class, 'update_user']);
         });
-    });
-
-    Route::group([
-        'prefix' => 'locations'
-    ], function ($router) {
-        Route::get('/get', [LocationController::class, 'get']);
     });
 
     Route::group([

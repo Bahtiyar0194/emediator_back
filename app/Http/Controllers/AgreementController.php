@@ -350,7 +350,7 @@ class AgreementController extends Controller
     }
 
     public function save(Request $request){
-        $language = Language::where('lang_tag', '=', $request->lang)->first();
+        $language = Language::where('lang_tag', '=', $request->lang)->firstOrFail();
 
         app()->setLocale($request->lang);
 
@@ -627,6 +627,11 @@ class AgreementController extends Controller
                     $new_user->given_name = mb_ucwords($party['given_name']);
                     $new_user->data = Crypt::encryptString(json_encode($party['data']));
                     $new_user->save();
+
+                    $new_user_role = new UserRole();
+                    $new_user_role->user_id = $new_user->user_id;
+                    $new_user_role->role_type_id = 4;
+                    $new_user_role->save();
                 }
                 else{
                     $find_iin->first_name = mb_ucwords($party['first_name']);
