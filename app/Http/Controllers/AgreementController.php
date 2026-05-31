@@ -10,6 +10,7 @@ use App\Models\Language;
 use App\Models\Bank;
 use App\Models\Color;
 use App\Models\User;
+use App\Models\UserRole;
 use App\Models\AgreementParty;
 use App\Models\AgreementTypicalPoint;
 use App\Models\Mediator;
@@ -45,7 +46,7 @@ class AgreementController extends Controller
     }
 
     public function get_attributes(Request $request){
-        $language = Language::where('lang_tag', '=', $request->header('Accept-Language'))->first();
+        $language = Language::where('lang_tag', '=', $request->lang)->firstOrFail();
 
         $legal_forms = LegalFormType::leftJoin('types_of_legal_forms_lang', 'types_of_legal_forms.legal_form_id', '=', 'types_of_legal_forms_lang.legal_form_id')
         ->select(
@@ -220,6 +221,7 @@ class AgreementController extends Controller
             'agreements.agreement_type_id',
             'agreements.custom_template_id',
             'agreements.uuid',
+            'agreements.initiator_id',
             'agreements.data',
             'agreements.sigex_document_id',
             'custom_agreement_templates.template_name',

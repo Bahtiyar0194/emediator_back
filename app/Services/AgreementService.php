@@ -29,6 +29,7 @@ class AgreementService
             'first_name',
             'last_name',
             'given_name',
+            'data',
             'user_id'
         )
         ->where('user_id', $mediator_id)
@@ -42,6 +43,7 @@ class AgreementService
             'first_name' => $mediator->first_name,
             'last_name' => $mediator->last_name,
             'given_name' => $mediator->given_name,
+            'data' => isset($mediator->data) ? json_decode(Crypt::decryptString($mediator->data)) : null,
             'user_id' => $mediator->user_id,
             'mediator' => $mediator_data,
             'is_mediator' => 1,
@@ -304,6 +306,13 @@ class AgreementService
     }
 
     public function get_agreement_types($language){
+        // Получаем текущего аутентифицированного пользователя
+        $auth_user = auth()->user();
+
+        // Проверяем роли пользователя
+        $isAdmin = $auth_user->hasRole(['super_admin', 'admin']);
+        $isMediator = $auth_user->hasRole(['mediator']);
+
         $agreement_types = AgreementType::leftJoin('types_of_agreements_lang', 'types_of_agreements.agreement_type_id', '=', 'types_of_agreements_lang.agreement_type_id')
         ->where('types_of_agreements_lang.lang_id', '=', $language->lang_id)
         ->where('types_of_agreements.show_status_id', '=', 1)
@@ -314,12 +323,26 @@ class AgreementService
             'types_of_agreements.agreement_slug',
             'types_of_agreements.agreement_type_component',
             'types_of_agreements_lang.agreement_type_name'
-        )
-        ->orderBy('types_of_agreements.agreement_type_id', 'asc')
+        );
+
+        // Применяем фильтры ролей в зависимости от роли пользователя
+        if ($isAdmin) {
+            //Здесь выводим все типы соглашении
+        } 
+        elseif ($isMediator) {
+            //Если имеет роль медиатора то только произвольные типы соглашении
+            $agreement_types->whereIn('types_of_agreements.agreement_slug', ['arbitary', 'custom']);
+        } 
+        else{
+            //Если простой пользователь то выводим только конструктор
+            $agreement_types->whereNotIn('types_of_agreements.agreement_slug', ['arbitary', 'custom']);
+        }
+
+        $typesList = $agreement_types->orderBy('types_of_agreements.agreement_type_id', 'asc')
         ->orderBy('types_of_agreements_lang.agreement_type_name', 'desc')
         ->get();
 
-        $agreementTree = $this->buildTree($agreement_types);
+        $agreementTree = $this->buildTree($typesList);
 
         return $agreementTree;
     }
