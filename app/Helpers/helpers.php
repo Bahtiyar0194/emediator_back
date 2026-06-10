@@ -6,7 +6,6 @@ use App\Models\Bank;
 use App\Models\Color;
 
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
-
 use Carbon\Carbon;
 
 function morph($n, $f1, $f2, $f5) {
@@ -281,8 +280,67 @@ if (!function_exists('monthsWord')) {
 if (!function_exists('generateQr')) {
     function generateQr($text, $size, $margin) {
         return base64_encode(
-            QrCode::format('png')->size($size)->margin($margin)->generate($text)
+            QrCode::encoding('UTF-8')
+            ->format('png')
+            ->size($size)
+            ->margin($margin)
+            ->generate($text)
         );
+    }
+}
+
+if (!function_exists('signedDocumentLink')) {
+    function signedDocumentLink($uuid) {
+        return env('FRONTEND_URL').'/document?q='.$uuid;
+    }
+}
+
+if(!function_exists('generateSignedQr')) {
+    function generateSignedQr($sign, $uuid){
+        $subject = explode(",", $sign->subject);
+
+        $signer = [];
+
+        foreach($subject as $subject_item){
+            if(strpos($subject_item, 'CN=') !== false){
+                $cn = explode(' ', str_replace('CN=', '', $subject_item));
+
+                $signer[] = mb_ucwords($cn[0]);
+                $signer[] = mb_ucwords($cn[1]);
+            }  
+
+            if(strpos($subject_item, 'GIVENNAME=') !== false){
+                $signer[] = mb_ucwords(str_replace('GIVENNAME=', '', $subject_item));
+            }  
+        }
+
+        $signer = implode(" ", $signer);
+
+        $qr_text = [
+            'Подписант: '.$signer
+        ];
+
+        if(isset($sign->userId) && !empty($sign->userId)){
+            $qr_text[] = 'ИИН: '.str_replace("IIN", "", $sign->userId);
+        }
+
+        if(isset($sign->businessId) && !empty($sign->businessId)){
+            $qr_text[] = 'БИН: '.str_replace("BIN", "", $sign->businessId);
+        }
+
+        if(isset($sign->storedAt) && !empty($sign->storedAt)){
+            $qr_text[] = 'Дата и время подписания: ' .Carbon::createFromTimestampMs($sign->storedAt)->setTimezone('Asia/Almaty')->format('d.m.Y H:i:s');
+        }
+
+        if (isset($sign->serialNumber)  && !empty($sign->serialNumber)) {
+            $qr_text[] = 'Серийный № ЭЦП: ' . $sign->serialNumber;
+        }
+
+        $qr_text[] = 'Подробнее '.signedDocumentLink($uuid);
+
+        $qr_text = implode("\n", $qr_text);
+
+        return $qr_text;
     }
 }
 ?>

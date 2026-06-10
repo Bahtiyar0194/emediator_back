@@ -15,19 +15,37 @@
                             @endif
                             <br>
                             <br>
-                            ФИО: <b>{{ $party->last_name }} {{ $party->first_name }} @if (isset($party->given_name)){{ $party->given_name }}@endif</b>
+                            Ф.И.О: <b>{{ $party->last_name }} {{ $party->first_name }} @if (isset($party->given_name)){{ $party->given_name }}@endif</b>
                             <br>
                             ИИН: <b>{{ $party->iin }}</b>
                             <br>
                             <br>
-                            @if(isset($party->sigex_sign))
-                                <img src="data:image/png;base64, {!! generateQr(env('FRONTEND_URL').'/agreement/signs/'.$doctype.'/'.$document->uuid.'?sign_id='.$party->sigex_sign_id, 120, 0) !!}">
+                            @if(isset($party->qr_text))
+                                <img width="120" src="data:image/png;base64, {!! generateQr($party->qr_text, 500, 0) !!}">
                             @else
                                 <b style="color: red">Не подписано</b>
                             @endif
                         </td>
                     @endforeach
                 </tr>
+            </tbody>
+        </table>
+    @endif
+    
+    @if($document->status_type_id !== 11)
+        <br>
+        <br>
+        <br>
+        <table style="padding: 0px; margin: 0px">
+            <tbody>
+                <td>
+                    <p>Бұл құжатқа E-Mediator жүйесі арқылы қол қойылды. Электрондық құжаттың түпнұсқасын көру үшін <a href="{{signedDocumentLink($document->uuid)}}"><u>мына сілтеме арқылы өтіңіз</u></a></p>
+                    <p>Этот документ был подписан через систему E-Mediator. Для проверки подлинности документа <a href="{{signedDocumentLink($document->uuid)}}"><u>перейдите по данной ссылке</u></a></p>
+                    <p>This document was signed through the E-Mediator system. To verify the authenticity of an electronic document, <a href="{{signedDocumentLink($document->uuid)}}"><u>click on the link</u></a></p>
+                </td>
+                <td style="padding-left: 20px">
+                    <img width="120" src="data:image/png;base64, {!! generateQr(signedDocumentLink($document->uuid), 500, 0) !!}">
+                </td>
             </tbody>
         </table>
     @endif

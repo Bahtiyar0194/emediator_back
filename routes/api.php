@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\LocationController;
+use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\AgreementController;
 /*
 |--------------------------------------------------------------------------
@@ -71,7 +72,12 @@ Route::group([
             Route::post('/get/{uuid}', [AgreementController::class, 'get_agreement']);
             Route::get('/cms/{type}/{uuid}', [AgreementController::class, 'get_cms_file']);
         });
+    });
 
-        Route::get('/get_file/{document}/{type}/{uuid}', [AgreementController::class, 'get_file']);
+    Route::group([
+        'prefix' => 'document'
+    ], function ($router) {
+        Route::get('/get/{uuid}', [DocumentController::class, 'get_document']);
+        Route::get('/get_file/{document}/{type}/{uuid}', [DocumentController::class, 'get_file'])->middleware('throttle:10,1'); // 10 попыток на одну минуту
     });
 });

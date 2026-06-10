@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Crypt;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Storage;
+use Carbon\Carbon;
 
 class AgreementService
 {
@@ -103,6 +104,12 @@ class AgreementService
         foreach ($agreement_parties as $key => $party) {
             if(isset($party->data)){
                 $party->data = json_decode(Crypt::decryptString($party->data));
+            }
+
+            if(isset($party->sigex_sign)){
+                $sign = json_decode(Crypt::decryptString($party->sigex_sign));
+
+                $party->qr_text = generateSignedQr($sign, $agreement->uuid);
             }
 
             if($party->is_mediator === 1){
@@ -221,6 +228,12 @@ class AgreementService
         foreach ($contract_parties as $key => $party) {
             if(isset($party->data)){
                 $party->data = json_decode(Crypt::decryptString($party->data));
+            }
+
+            if(isset($party->sigex_sign)){
+                $sign = json_decode(Crypt::decryptString($party->sigex_sign));
+
+                $party->qr_text = generateSignedQr($sign, $mediation_contract->uuid);
             }
 
             if($party->is_mediator === 1){

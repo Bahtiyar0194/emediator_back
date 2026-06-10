@@ -30,6 +30,7 @@ use Config;
 use Validator;
 use Log;
 use Str;
+use Auth;
 use Carbon\Carbon;
 
 use App\Services\LocationService;
@@ -315,40 +316,6 @@ class AgreementController extends Controller
             'agreement' => $agreement,
             'contract' => $contract
         ], 200); 
-    }
-
-    public function get_file(Request $request){
-
-        if($request->document === 'agreement'){
-            $document_path = 'app/public/agreements';
-        }
-        elseif($request->document === 'contract'){
-            $document_path = 'app/public/agreements/contracts';
-        }
-
-        $path = storage_path($document_path.'/'.$request->type.'/' . $request->uuid . '.pdf');
-        
-        if (!File::exists($path)) {
-            return response()->json(['status' => 'error', 'message' => 'File not found'], 404);
-        }
-
-        $type = File::mimeType($path);
-
-        $file = File::get($path);
-        $response = Response::make($file, 200);
-
-        if($request->type === 'original'){
-            $base64 = base64_encode($file);
-            $mime = File::mimeType($path);
-
-            return response()->json([
-                'data' => $base64,
-                'mime' => $mime
-            ], 200);
-        }
-
-        $response->header("Content-Type", $type);
-        return $response;
     }
 
     public function save(Request $request){
