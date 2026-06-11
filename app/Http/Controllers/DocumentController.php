@@ -111,17 +111,44 @@ class DocumentController extends Controller
 
         $isAuthorized = false;
 
+        $agreement = Agreement::where('uuid', $request->uuid)
+        ->first();
+
+        $contract = MediationContract::where('uuid', '=', $request->uuid)
+        ->first();
+
         // Вариант 1: пользователь авторизован по токену
         if ($authUser) {
             $isAuthorized = true;
+
+            if(isset($agreement)){
+                $isParty = AgreementParty::where('agreement_id', $agreement->agreement_id)
+                ->where('user_id', $authUser->user_id)
+                ->first();
+
+                if(!isset($isParty)){
+                    return response()->json([
+                        'message' => 'Access denied'
+                    ], 403);
+                }
+            }
+
+            if(isset($contract)){
+                $isParty = MediationContractParty::where('mediation_contract_id', $contract->mediation_contract_id)
+                ->where('user_id', $authUser->user_id)
+                ->first();
+
+                if(!isset($isParty)){
+                    return response()->json([
+                        'message' => 'Access denied'
+                    ], 403);
+                }
+            }
         }
 
         // Вариант 2: пользователь ввёл последние 4 цифры телефона
         if (!$isAuthorized && $request->filled('phone')) {
             if($request->document === 'agreement'){
-                $agreement = Agreement::where('uuid', $request->uuid)
-                ->first();
-
                 if(isset($agreement)){
                     $agreement_parties = AgreementParty::leftJoin('users', 'agreement_parties.user_id', '=', 'users.user_id')
                     ->select(
@@ -155,8 +182,6 @@ class DocumentController extends Controller
                 }
             }
             elseif($request->document === 'contract'){
-                $contract = MediationContract::where('uuid', '=', $request->uuid)
-                ->first();
 
                 if(isset($contract)){
                     $contract_parties = MediationContractParty::leftJoin('users', 'mediation_contract_parties.user_id', '=', 'users.user_id')
