@@ -76,6 +76,7 @@ class AgreementService
             'initiator.last_name as initiator_last_name',
             'types_of_agreements.agreement_slug',
             'types_of_agreements_lang.agreement_type_name',
+            'agreements.status_type_id',
             'agreements.created_at',
             'agreements.updated_at'
         )
