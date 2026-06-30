@@ -343,10 +343,4 @@ if(!function_exists('generateSignedQr')) {
         return $qr_text;
     }
 }
-
-if(!function_exists('isAttorneyIncludes')) {
-    function isAttorneyIncludes($){
-
-    }
-}
 ?>
