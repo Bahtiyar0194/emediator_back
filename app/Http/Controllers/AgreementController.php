@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 use App\Models\LegalFormType;
+use App\Models\AttorneyType;
 use App\Models\OrganizationPostType;
 use App\Models\AgreementType;
 use App\Models\Agreement;
@@ -24,6 +25,7 @@ use Illuminate\Support\Facades\Http;
 use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Crypt;
+
 use Storage;
 use File;
 use Config;
@@ -63,6 +65,14 @@ class AgreementController extends Controller
             'types_of_organization_posts_lang.post_type_name'
         )
         ->where('types_of_organization_posts_lang.lang_id', '=', $language->lang_id)
+        ->get();
+
+        $attorney_types = AttorneyType::leftJoin('types_of_attorney_lang', 'types_of_attorney.attorney_type_id', '=', 'types_of_attorney_lang.attorney_type_id')
+        ->select(
+            'types_of_attorney.attorney_type_id',
+            'types_of_attorney_lang.attorney_type_name'
+        )
+        ->where('types_of_attorney_lang.lang_id', '=', $language->lang_id)
         ->get();
 
 
@@ -108,6 +118,7 @@ class AgreementController extends Controller
         $attributes->agreement_types = $agreement_types;
         $attributes->legal_forms = $legal_forms;
         $attributes->posts = $posts;
+        $attributes->attorney_types = $attorney_types;
         $attributes->colors = $colors;
         $attributes->banks = $banks;
         $attributes->mediators = $mediators;
@@ -187,7 +198,11 @@ class AgreementController extends Controller
                 'contract_status.color as contract_status_color',
                 'contract_status_lang.status_type_name as contract_status_name',
             )
-            ->where('agreement_parties.user_id', $auth_user->user_id)
+            // Группируем условия через функцию-замыкание для правильных скобок в SQL
+            ->where(function ($query) use ($auth_user) {
+                $query->where('agreement_parties.user_id', $auth_user->user_id)
+                ->orWhere('agreement_parties.representative_id', $auth_user->user_id);
+            })
             ->where('types_of_agreements_lang.lang_id', $language->lang_id)
             ->distinct()
             ->orderBy($sortKey, $sortDirection);
@@ -257,7 +272,8 @@ class AgreementController extends Controller
             'agreement_parties.is_mediator',
             'agreement_parties.sigex_sign_id',
             'agreement_parties.sigex_sign',
-            'agreement_parties.signed_at'
+            'agreement_parties.signed_at',
+            'agreement_parties.attorney_data'
         )
         ->where('agreement_parties.agreement_id', $agreement->agreement_id)
         ->orderBy('id', 'asc')
@@ -266,6 +282,15 @@ class AgreementController extends Controller
         foreach ($agreement_parties as $key => $party) {
             if(isset($party->data)){
                 $party->data = json_decode(Crypt::decryptString($party->data));
+
+                if(isset($party->data->attorney)){
+                    unset($party->data->attorney);
+                }
+
+                if(isset($party->attorney_data)){
+                    $party->data->attorney = json_decode(Crypt::decryptString($party->attorney_data));
+                    unset($party->attorney_data);
+                }
             }
 
             if($party->is_mediator === 1){
@@ -291,7 +316,8 @@ class AgreementController extends Controller
             'mediation_contract_parties.is_mediator',
             'mediation_contract_parties.sigex_sign_id',
             'mediation_contract_parties.sigex_sign',
-            'mediation_contract_parties.signed_at'
+            'mediation_contract_parties.signed_at',
+            'mediation_contract_parties.attorney_data'
         )
         ->where('mediation_contract_parties.mediation_contract_id', $contract->mediation_contract_id)
         ->orderBy('mediation_contract_parties.id', 'asc')
@@ -300,6 +326,15 @@ class AgreementController extends Controller
         foreach ($contract_parties as $key => $party) {
             if(isset($party->data)){
                 $party->data = json_decode(Crypt::decryptString($party->data));
+
+                if(isset($party->data->attorney)){
+                    unset($party->data->attorney);
+                }
+
+                if(isset($party->attorney_data)){
+                    $party->data->attorney = json_decode(Crypt::decryptString($party->attorney_data));
+                    unset($party->attorney_data);
+                }
             }
 
             if($party->is_mediator === 1){
@@ -365,6 +400,21 @@ class AgreementController extends Controller
                     "agreement_parties.$index.data.company_location.building" =>
                         "nullable|required_if:agreement_parties.$index.data.is_legal,true|between:1,10",
                 ]);
+
+                if($request->agreement_parties[$index]['data']['is_legal'] === true && $request->agreement_parties[$index]['data']['attorney']['includes'] === true){
+                    $rules = array_merge($rules, [
+                        "agreement_parties.$index.data.attorney.type_id" => 'required|numeric',
+                        "agreement_parties.$index.data.attorney.num" => 'required',
+                        "agreement_parties.$index.data.attorney.date" => 'required|date',
+                        "agreement_parties.$index.data.attorney.person.first_name" => 'required|string',
+                        "agreement_parties.$index.data.attorney.person.last_name" => 'required|string',
+                        "agreement_parties.$index.data.attorney.person.iin" => 'required|string|size:12',
+                        "agreement_parties.$index.data.attorney.person.data.phone" => 'required|regex:/^((?!_).)*$/s',
+                        "agreement_parties.$index.data.attorney.person.data.location.id" => 'required|numeric',
+                        "agreement_parties.$index.data.attorney.person.data.location.street" => 'required|string|between:2,100',
+                        "agreement_parties.$index.data.attorney.person.data.location.house" => 'required|regex:/^\d+(\/\d+)?$/',
+                    ]);
+                }
             }
 
             $validator = Validator::make($request->all(), $rules);
@@ -585,6 +635,41 @@ class AgreementController extends Controller
             $agreement_id = isset($edit_agreement) ? $edit_agreement->agreement_id : $new_agreement->agreement_id;
 
             foreach ($data['agreement_parties'] as $key => $party) {
+                if($party['data']['is_legal'] === true && isset($party['data']['attorney']) && $party['data']['attorney']['includes'] === true){
+                    $find_representative_iin = User::where('iin', '=', $party['data']['attorney']['person']['iin'])
+                    ->first();
+
+                    if(!isset($find_representative_iin)){
+                        $new_representative_user = new User();
+                        $new_representative_user->iin = $party['data']['attorney']['person']['iin'];
+                        $new_representative_user->first_name = mb_ucwords($party['data']['attorney']['person']['first_name']);
+                        $new_representative_user->last_name = mb_ucwords($party['data']['attorney']['person']['last_name']);
+
+                        if(isset($party['data']['attorney']['person']['given_name'])){
+                            $new_representative_user->given_name = mb_ucwords($party['data']['attorney']['person']['given_name']);
+                        }
+
+                        $new_representative_user->data = Crypt::encryptString(json_encode($party['data']['attorney']['person']['data']));
+                        $new_representative_user->save();
+
+                        $new_representative_user_role = new UserRole();
+                        $new_representative_user_role->user_id = $new_representative_user->user_id;
+                        $new_representative_user_role->role_type_id = 4;
+                        $new_representative_user_role->save();
+                    }
+                    else{
+                        $find_representative_iin->first_name = mb_ucwords($party['data']['attorney']['person']['first_name']);
+                        $find_representative_iin->last_name = mb_ucwords($party['data']['attorney']['person']['last_name']);
+
+                        if(isset($party['data']['attorney']['person']['given_name'])){
+                            $find_representative_iin->given_name = mb_ucwords($party['data']['attorney']['person']['given_name']);
+                        }
+
+                        $find_representative_iin->data = Crypt::encryptString(json_encode($party['data']['attorney']['person']['data']));
+                        $find_representative_iin->save();
+                    }
+                }
+
                 $find_iin = User::where('iin', '=', $party['iin'])
                 ->first();
 
@@ -593,7 +678,11 @@ class AgreementController extends Controller
                     $new_user->iin = $party['iin'];
                     $new_user->first_name = mb_ucwords($party['first_name']);
                     $new_user->last_name = mb_ucwords($party['last_name']);
-                    $new_user->given_name = mb_ucwords($party['given_name']);
+
+                    if(isset($party['given_name'])){
+                        $new_user->given_name = mb_ucwords($party['given_name']);
+                    }
+
                     $new_user->data = Crypt::encryptString(json_encode($party['data']));
                     $new_user->save();
 
@@ -605,18 +694,36 @@ class AgreementController extends Controller
                 else{
                     $find_iin->first_name = mb_ucwords($party['first_name']);
                     $find_iin->last_name = mb_ucwords($party['last_name']);
-                    $find_iin->given_name = mb_ucwords($party['given_name']);
+
+                    if(isset($party['given_name'])){
+                        $find_iin->given_name = mb_ucwords($party['given_name']);
+                    }
+
                     $find_iin->data = Crypt::encryptString(json_encode($party['data']));
                     $find_iin->save();
                 }
 
                 $new_party = new AgreementParty();
                 $new_party->user_id = isset($find_iin) ? $find_iin->user_id : $new_user->user_id;
+
+                if($party['data']['is_legal'] === true && isset($party['data']['attorney']) && $party['data']['attorney']['includes'] === true){
+                    $new_party->representative_id = isset($find_representative_iin) ? $find_representative_iin->user_id : $new_representative_user->user_id;
+                    $new_party->attorney_data = Crypt::encryptString(json_encode($party['data']['attorney']));
+                }
+        
                 $new_party->agreement_id = $agreement_id;
                 $new_party->save();
 
                 if($key === 0){
                     $firstPartyUserId = $new_party->user_id;
+
+                    if(isset($new_party->representative_id)){
+                        $repsentativeUserId = $new_party->representative_id;
+                    }
+
+                    if(isset($new_party->attorney_data)){
+                        $attorneyData = $new_party->attorney_data;
+                    }
                 }
             }
 
@@ -656,6 +763,15 @@ class AgreementController extends Controller
 
                 $new_party = new MediationContractParty();
                 $new_party->user_id = $firstPartyUserId;
+                
+                if(isset($repsentativeUserId)){
+                    $new_party->representative_id = $repsentativeUserId;
+                }
+
+                if(isset($attorneyData)){
+                    $new_party->attorney_data = $attorneyData;
+                }
+
                 $new_party->mediation_contract_id = $new_mediation_contract->mediation_contract_id;
                 $new_party->is_mediator = 0;
                 $new_party->save();
@@ -684,29 +800,38 @@ class AgreementController extends Controller
 
             $agreement = Agreement::where('uuid', $request->uuid)->firstOrFail();
             $contract = MediationContract::where('agreement_id', $agreement->agreement_id)->first();
-
             $language = Language::where('lang_tag', $request->lang)->firstOrFail();
 
             [$document, $parties, $model, $type] = $this->resolveContext($request->mode, $agreement, $contract);
 
+            // Формируем список уникальных ИИН для настроек Sigex
             $ids = collect($parties)->map(function ($p) {
+                if (isset($p->attorney) && $p->attorney->includes === true) {
+                    $iin = $p->attorney->person->iin;
+                } else {
+                    $iin = $p->iin;
+                }
+                return 'IIN' . $iin; // Сначала собираем просто плоский список строк
+            })
+            ->unique() // 🌟 УДАЛЯЕМ ДУБЛИКАТЫ ИИН (если один поверенный за двоих)
+            ->map(function ($iin) {
                 return [
-                    'iin' => 'IIN' . $p->iin
+                    'iin' => $iin
                 ];
-            })->values()->toArray();
+            })
+            ->values()
+            ->toArray();
 
             if (!$document->sigex_document_id) {
-                // 📌 Создание документа (если нет)
+                // 📌 Создание документа
                 $responseData = $this->sigexRequest('POST', $apiUrl, [
                     'title' => $document->uuid . '.pdf',
                     'signType' => 'cms',
                     'signature' => $request->signature,
-                    'settings' => $this->buildSettings($ids, count($parties)),
+                    'settings' => $this->buildSettings($ids, count($ids)),
                 ]);
 
                 $documentId = $responseData['documentId'];
-
-                // 📌 Отправка файла (фикс хеша)
                 $filePath = $this->getFilePath($type, $document->uuid);
 
                 if (!File::exists($filePath)) {
@@ -717,8 +842,7 @@ class AgreementController extends Controller
 
                 $document->sigex_document_id = $documentId;
                 $document->save();
-            }
-            else {
+            } else {
                 // 📌 Подпись существующего документа
                 $this->sigexRequest('POST', $apiUrl . '/' . $document->sigex_document_id, [
                     'signType' => 'cms',
@@ -726,12 +850,12 @@ class AgreementController extends Controller
                 ]);
             }
 
-            // 📌 Получение подписей
+            // 📌 Получение актуальных подписей из Sigex
             $responseData = $this->sigexRequest('GET', $apiUrl . '/' . $document->sigex_document_id);
 
             $this->updateSignatures($parties, $responseData['signatures'], $model, $document);
 
-            // 📌 Генерация файла
+            // 📌 Регенерация файла (чтобы наложить штампы подписей на PDF)
             $this->generateDocument($type, $agreement, $language);
 
             return response()->json([
@@ -793,12 +917,22 @@ class AgreementController extends Controller
     private function resolveContext($mode, $agreement, $contract)
     {
         if ($mode === 'agreement') {
+            $parties = AgreementParty::leftJoin('users', 'agreement_parties.user_id', '=', 'users.user_id')
+                ->select('agreement_parties.id', 'agreement_parties.representative_id', 'agreement_parties.attorney_data', 'users.iin')
+                ->where('agreement_parties.agreement_id', $agreement->agreement_id)
+                ->get();
+
+            foreach ($parties as $party) {
+                if (!empty($party->attorney_data)) {
+                    $party->attorney = json_decode(Crypt::decryptString($party->attorney_data));
+                } else {
+                    $party->attorney = null;
+                }
+            }
+
             return [
                 $agreement,
-                AgreementParty::leftJoin('users', 'agreement_parties.user_id', '=', 'users.user_id')
-                    ->select('agreement_parties.id', 'users.iin')
-                    ->where('agreement_parties.agreement_id', $agreement->agreement_id)
-                    ->get(),
+                $parties,
                 AgreementParty::class,
                 'agreement'
             ];
@@ -809,12 +943,22 @@ class AgreementController extends Controller
                 throw new \Exception('Contract not found');
             }
 
+            $parties = MediationContractParty::leftJoin('users', 'mediation_contract_parties.user_id', '=', 'users.user_id')
+                ->select('mediation_contract_parties.id', 'mediation_contract_parties.representative_id', 'mediation_contract_parties.attorney_data', 'users.iin')
+                ->where('mediation_contract_parties.mediation_contract_id', $contract->mediation_contract_id)
+                ->get();
+
+            foreach ($parties as $party) {
+                if (!empty($party->attorney_data)) {
+                    $party->attorney = json_decode(Crypt::decryptString($party->attorney_data));
+                } else {
+                    $party->attorney = null;
+                }
+            }
+
             return [
                 $contract,
-                MediationContractParty::leftJoin('users', 'mediation_contract_parties.user_id', '=', 'users.user_id')
-                    ->select('mediation_contract_parties.id', 'users.iin')
-                    ->where('mediation_contract_parties.mediation_contract_id', $contract->mediation_contract_id)
-                    ->get(),
+                $parties,
                 MediationContractParty::class,
                 'contract'
             ];
@@ -848,7 +992,18 @@ class AgreementController extends Controller
 
         $json = $response->json();
 
+        // Проверяем на ошибку
         if (!$response->successful() || isset($json['message'])) {
+            
+            // 📝 Записываем подробности в лог
+            Log::error('Sigex Request Failed', [
+                'url'     => $url,
+                'method'  => $method,
+                'status'  => $response->status(), // HTTP код ответа (400, 404, 500 и т.д.)
+                'payload' => $data,                // Что мы отправляли
+                'response'=> $json                 // Что ответил Sigex (там будет точная причина)
+            ]);
+
             throw new \Exception($json['message'] ?? 'Sigex error');
         }
 
@@ -881,16 +1036,29 @@ class AgreementController extends Controller
 
     private function updateSignatures($parties, $signatures, $model, $document)
     {
-        $index = collect($parties)->pluck('id', 'iin')->toArray();
+        
+        // Строим карту: [ 'ИИН_подписанта' => 'ID_строки_стороны' ]
+        $index = collect($parties)->mapWithKeys(function ($p) {
+            if (isset($p->attorney) && ($p->attorney->includes ?? false) === true) {
+                $iin = $p->attorney->person->iin;
+            } else {
+                $iin = $p->iin;
+            }
+            
+            // mapWithKeys ожидает возврат ассоциативного массива [ключ => значение]
+            return [$iin => $p->id];
+        })->toArray();
 
         $signedIins = [];
 
         foreach ($signatures as $signature) {
+            // Убираем префикс "IIN", приходящий от Sigex
             $iin = str_replace('IIN', '', $signature['userId']);
 
             if (isset($index[$iin])) {
                 $signedIins[] = $iin;
 
+                // Обновляем статус конкретной стороны, чья подпись совпала
                 $model::where('id', $index[$iin])->update([
                     'sigex_sign_id' => $signature['signId'],
                     'sigex_sign' => Crypt::encryptString(json_encode($signature)),
@@ -902,12 +1070,13 @@ class AgreementController extends Controller
         $totalCount = count($index);
         $signedCount = count(array_unique($signedIins));
 
+        // Логика статусов документа
         if ($signedCount > 0) {
-            $document->status_type_id = 12;
+            $document->status_type_id = 12; // Частично подписан
         }
 
         if ($signedCount === $totalCount && $totalCount > 0) {
-            $document->status_type_id = 13;
+            $document->status_type_id = 13; // Полностью подписан всем сторонами
         }
 
         $document->save();

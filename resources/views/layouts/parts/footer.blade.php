@@ -20,6 +20,17 @@
                             ИИН: <b>{{ $party->iin }}</b>
                             <br>
                             <br>
+
+                            @if(isset($party->data->attorney) && $party->data->attorney->includes === true && isset($party->data->attorney->person))
+                            <b>Представитель</b>
+                            <br>
+                            Ф.И.О: <b>{{ $party->data->attorney->person->last_name }} {{ $party->data->attorney->person->first_name }} @if (isset($party->data->attorney->person->given_name)){{ $party->data->attorney->person->given_name }}@endif</b>
+                            <br>
+                            ИИН: <b>{{ $party->data->attorney->person->iin }}</b>
+                            <br>
+                            <br>
+                            @endif
+
                             @if(isset($party->qr_text))
                                 <img width="120" src="data:image/png;base64, {!! generateQr($party->qr_text, 500, 0) !!}">
                             @else

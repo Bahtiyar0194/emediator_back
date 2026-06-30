@@ -92,50 +92,73 @@ class AuthController extends Controller
                 $find_iin = User::where('iin', '=', str_replace("IIN", "", $response->userId))
                 ->first();
 
-                if(!isset($find_iin)){
-                    $new_user = new User();
-
+                if(isset($response->subject)){
                     $subject = explode(",", $response->subject);
 
-                    foreach($subject as $subject_item){
-                        if(strpos($subject_item, 'CN=') !== false){
-                            $cn = explode(' ', str_replace('CN=', '', $subject_item));
+                    if(!isset($find_iin)){
+                        $new_user = new User();
 
-                            $new_user->first_name = mb_ucwords($cn[1]);
-                            $new_user->last_name = mb_ucwords($cn[0]);
-                        }  
+                        foreach($subject as $subject_item){
+                            if(strpos($subject_item, 'CN=') !== false){
+                                $cn = explode(' ', str_replace('CN=', '', $subject_item));
 
-                        if(strpos($subject_item, 'GIVENNAME=') !== false){
-                            $new_user->given_name = mb_ucwords(str_replace('GIVENNAME=', '', $subject_item));
-                        }  
+                                $new_user->first_name = mb_ucwords($cn[1]);
+                                $new_user->last_name = mb_ucwords($cn[0]);
+                            }  
+
+                            if(strpos($subject_item, 'GIVENNAME=') !== false){
+                                $new_user->given_name = mb_ucwords(str_replace('GIVENNAME=', '', $subject_item));
+                            }  
+                        }
+
+                        $new_user->iin = str_replace("IIN", "", $response->userId);
+
+                        if(isset($response->businessId)){
+                            $new_user->bin = str_replace("BIN", "", $response->businessId);
+                        }
+
+                        $new_user->lang_id = $language->lang_id;
+                        $new_user->save();
+
+                        $new_user_role = new UserRole();
+                        $new_user_role->user_id = $new_user->user_id;
+                        $new_user_role->role_type_id = 4;
+                        $new_user_role->save();
+
+                        return response()->json(['token' => $new_user->createToken('API Token')->plainTextToken], 200);
                     }
+                    else{
+                        foreach($subject as $subject_item){
+                            if(strpos($subject_item, 'CN=') !== false){
+                                $cn = explode(' ', str_replace('CN=', '', $subject_item));
 
-                    $new_user->iin = str_replace("IIN", "", $response->userId);
+                                $find_iin->first_name = mb_ucwords($cn[1]);
+                                $find_iin->last_name = mb_ucwords($cn[0]);
+                            }  
 
-                    if(isset($response->businessId)){
-                        $new_user->bin = str_replace("BIN", "", $response->businessId);
+                            if(strpos($subject_item, 'GIVENNAME=') !== false){
+                                $find_iin->given_name = mb_ucwords(str_replace('GIVENNAME=', '', $subject_item));
+                            }  
+                        }
+
+                        if(isset($response->businessId)){
+                            $find_iin->bin = str_replace("BIN", "", $response->businessId);
+                        }
+
+                        $find_iin->save();
+
+                        Auth::login($find_iin);
+
+                        if(auth()->user()->status_type_id == 2){
+                            return response()->json(['auth_failed' => trans('auth.failed')], 401);
+                        }
+
+                        return response()->json(['token' => auth()->user()->createToken('API Token')->plainTextToken], 200);
                     }
-
-                    $new_user->lang_id = $language->lang_id;
-                    $new_user->save();
-
-                    $new_user_role = new UserRole();
-                    $new_user_role->user_id = $new_user->user_id;
-                    $new_user_role->role_type_id = 4;
-                    $new_user_role->save();
-
-                    return response()->json(['token' => $new_user->createToken('API Token')->plainTextToken], 200);
                 }
-                else{
-
-                    Auth::login($find_iin);
-
-                    if(auth()->user()->status_type_id == 2){
-                        return response()->json(['auth_failed' => trans('auth.failed')], 401);
-                    }
-
-                    return response()->json(['token' => auth()->user()->createToken('API Token')->plainTextToken], 200);
-                }
+            }
+            else{
+                return response()->json(['error' => $response->json()], 400);
             }
         }
         else{

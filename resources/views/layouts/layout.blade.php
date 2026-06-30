@@ -11,10 +11,16 @@
                 margin: 15mm 15mm 15mm 25mm;
             }
 
+            html, body {
+                height: auto !important;
+                overflow: visible !important;
+            }
+
             body {
                 font-family: "Roboto", sans-serif;
                 font-size: 14px;
-                text-align: justify
+                text-align: justify;
+                line-height: 18px;
             }
 
             ol {
@@ -84,6 +90,7 @@
     </head>
 
     <body>
+
         @if($document->status_type_id !== 11)
         <div class="signs_stamp">
             @foreach($parties as $k => $party)

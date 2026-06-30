@@ -32,9 +32,11 @@ class DocumentController extends Controller
                 'users.last_name',
                 'users.given_name',
                 'users.iin',
+                'users.data',
                 'agreement_parties.is_mediator',
                 'agreement_parties.sigex_sign_id',
-                'agreement_parties.signed_at'
+                'agreement_parties.signed_at',
+                'agreement_parties.attorney_data'
             )
             ->where('agreement_parties.agreement_id', $agreement->agreement_id)
             ->orderBy('id', 'asc')
@@ -43,6 +45,15 @@ class DocumentController extends Controller
             foreach ($agreement_parties as $key => $party) {
                 if(isset($party->data)){
                     $party->data = json_decode(Crypt::decryptString($party->data));
+
+                    if(isset($party->data->attorney)){
+                        unset($party->data->attorney);
+                    }
+
+                    if(isset($party->attorney_data)){
+                        $party->data->attorney = json_decode(Crypt::decryptString($party->attorney_data));
+                        unset($party->attorney_data);
+                    }
                 }
 
                 if($party->is_mediator === 1){
@@ -66,9 +77,11 @@ class DocumentController extends Controller
                 'users.last_name',
                 'users.given_name',
                 'users.iin',
+                'users.data',
                 'mediation_contract_parties.is_mediator',
                 'mediation_contract_parties.sigex_sign_id',
-                'mediation_contract_parties.signed_at'
+                'mediation_contract_parties.signed_at',
+                'mediation_contract_parties.attorney_data'
             )
             ->where('mediation_contract_parties.mediation_contract_id', $contract->mediation_contract_id)
             ->orderBy('mediation_contract_parties.id', 'asc')
@@ -77,6 +90,15 @@ class DocumentController extends Controller
             foreach ($contract_parties as $key => $party) {
                 if(isset($party->data)){
                     $party->data = json_decode(Crypt::decryptString($party->data));
+
+                    if(isset($party->data->attorney)){
+                        unset($party->data->attorney);
+                    }
+
+                    if(isset($party->attorney_data)){
+                        $party->data->attorney = json_decode(Crypt::decryptString($party->attorney_data));
+                        unset($party->attorney_data);
+                    }
                 }
 
                 if($party->is_mediator === 1){
@@ -123,7 +145,10 @@ class DocumentController extends Controller
 
             if(isset($agreement)){
                 $isParty = AgreementParty::where('agreement_id', $agreement->agreement_id)
-                ->where('user_id', $authUser->user_id)
+                ->where(function ($query) use ($authUser) {
+                    $query->where('user_id', $authUser->user_id)
+                    ->orWhere('representative_id', $authUser->user_id);
+                })
                 ->first();
 
                 if(!isset($isParty)){
@@ -135,7 +160,10 @@ class DocumentController extends Controller
 
             if(isset($contract)){
                 $isParty = MediationContractParty::where('mediation_contract_id', $contract->mediation_contract_id)
-                ->where('user_id', $authUser->user_id)
+                ->where(function ($query) use ($authUser) {
+                    $query->where('user_id', $authUser->user_id)
+                    ->orWhere('representative_id', $authUser->user_id);
+                })
                 ->first();
 
                 if(!isset($isParty)){
@@ -148,75 +176,60 @@ class DocumentController extends Controller
 
         // Вариант 2: пользователь ввёл последние 4 цифры телефона
         if (!$isAuthorized && $request->filled('phone')) {
-            if($request->document === 'agreement'){
-                if(isset($agreement)){
-                    $agreement_parties = AgreementParty::leftJoin('users', 'agreement_parties.user_id', '=', 'users.user_id')
-                    ->select(
-                        'users.data'
-                    )
+            $partiesCollection = collect();
+
+            if ($request->document === 'agreement' && isset($agreement)) {
+                $partiesCollection = AgreementParty::leftJoin('users', 'agreement_parties.user_id', '=', 'users.user_id')
+                    ->select('users.data', 'agreement_parties.attorney_data')
                     ->where('agreement_parties.agreement_id', $agreement->agreement_id)
-                    ->orderBy('id', 'asc')
+                    ->orderBy('agreement_parties.id', 'asc')
                     ->get();
-
-                    foreach ($agreement_parties as $key => $party) {
-                        if (!$party->data) {
-                            continue;
-                        }
-
-                        $data = json_decode(Crypt::decryptString($party->data));
-
-                        if (empty($data->phone)) {
-                            continue;
-                        }
-
-                        $phone = preg_replace('/\D/', '', $data->phone);
-
-                        if (
-                            preg_match('/^\d{4}$/', $request->phone) &&
-                            substr($phone, -4) === $request->phone
-                        ) {
-                            $isAuthorized = true;
-                            break;
-                        }
-                    }
-                }
-            }
-            elseif($request->document === 'contract'){
-
-                if(isset($contract)){
-                    $contract_parties = MediationContractParty::leftJoin('users', 'mediation_contract_parties.user_id', '=', 'users.user_id')
-                    ->select(
-                        'users.data'
-                    )
+            } elseif ($request->document === 'contract' && isset($contract)) {
+                $partiesCollection = MediationContractParty::leftJoin('users', 'mediation_contract_parties.user_id', '=', 'users.user_id')
+                    ->select('users.data', 'mediation_contract_parties.attorney_data')
                     ->where('mediation_contract_parties.mediation_contract_id', $contract->mediation_contract_id)
                     ->orderBy('mediation_contract_parties.id', 'asc')
                     ->get();
+            }
 
-                    foreach ($contract_parties as $key => $party) {
-                        if (!$party->data) {
-                            continue;
-                        }
+            foreach ($partiesCollection as $party) {
+                $targetPhone = null;
 
-                        $data = json_decode(Crypt::decryptString($party->data));
-
-                        if (empty($data->phone)) {
-                            continue;
-                        }
-
-                        $phone = preg_replace('/\D/', '', $data->phone);
-
-                        if (
-                            preg_match('/^\d{4}$/', $request->phone) &&
-                            substr($phone, -4) === $request->phone
-                        ) {
-                            $isAuthorized = true;
-                            break;
-                        }
+                // 1. Проверяем доверенность в первую очередь
+                if (!empty($party->attorney_data)) {
+                    $attorney = json_decode(Crypt::decryptString($party->attorney_data));
+                    
+                    // Если флаг включает доверенность, берём телефон представителя
+                    if (isset($attorney->includes) && $attorney->includes === true) {
+                        $targetPhone = $attorney->person->data->phone ?? null;
                     }
+                }
+
+                // 2. Если доверенности нет или она не активна, берём телефон основного пользователя
+                if (!$targetPhone && !empty($party->data)) {
+                    $userData = json_decode(Crypt::decryptString($party->data));
+                    $targetPhone = $userData->phone ?? null;
+                }
+
+                // 3. Если телефон не найден — пропускаем эту сторону
+                if (empty($targetPhone)) {
+                    continue;
+                }
+
+                // Очищаем телефон от лишних символов
+                $cleanPhone = preg_replace('/\D/', '', $targetPhone);
+
+                // 4. Проверяем совпадение последних 4 цифр
+                if (
+                    preg_match('/^\d{4}$/', $request->phone) &&
+                    substr($cleanPhone, -4) === $request->phone
+                ) {
+                    $isAuthorized = true;
+                    break;
                 }
             }
 
-            if(!$isAuthorized){
+            if (!$isAuthorized) {
                 return response()->json([
                     'message' => 'Access denied'
                 ], 403);

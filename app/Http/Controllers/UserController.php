@@ -64,6 +64,7 @@ class UserController extends Controller
         $iin = trim((string) $request->iin);
 
         $user = User::select(
+            'iin',
             'last_name',
             'first_name',
             'given_name',

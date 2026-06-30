@@ -96,7 +96,8 @@ class AgreementService
             'agreement_parties.is_mediator',
             'agreement_parties.sigex_sign_id',
             'agreement_parties.sigex_sign',
-            'agreement_parties.signed_at'
+            'agreement_parties.signed_at',
+            'agreement_parties.attorney_data'
         )
         ->where('agreement_parties.agreement_id', $agreement->agreement_id)
         ->orderBy('agreement_parties.id', 'asc')
@@ -105,6 +106,10 @@ class AgreementService
         foreach ($agreement_parties as $key => $party) {
             if(isset($party->data)){
                 $party->data = json_decode(Crypt::decryptString($party->data));
+            }
+
+            if(isset($party->attorney_data)){
+                $party->data->attorney = json_decode(Crypt::decryptString($party->attorney_data));
             }
 
             if(isset($party->sigex_sign)){
@@ -195,6 +200,36 @@ class AgreementService
         //     $agreement->created_at->format('d-m-Y')
         // );
 
+        // 1. Сначала подготавливаем PDF и принудительно рендерим, чтобы зафиксировать структуру
+        $dompdf = $pdf->getDomPDF();
+        $dompdf->render(); 
+        $canvas = $dompdf->getCanvas();
+
+        // 2. Используем рабочую для вашей системы функцию page_script
+        $canvas->page_script(function ($pageNumber, $pageCount, $canvas, $fontMetrics) {
+            
+            // Формируем текст нумерации
+            $text = "стр. ". $pageNumber . "/" . $pageCount;
+            
+            // Используем Helvetica, так как она вшита в ядро Dompdf по умолчанию
+            $font = $fontMetrics->getFont("Roboto", "normal");
+            $size = 12;
+
+            // Размеры страницы для расчета координат
+            $width  = $canvas->get_width();
+            $height = $canvas->get_height();
+
+            // Считаем ширину текста, чтобы выровнять его ровно по центру
+            $textWidth = $fontMetrics->getTextWidth($text, $font, $size);
+            
+            // Координаты: центр по горизонтали, и 40 пикселей от низа страницы
+            $x = $width - $textWidth - 40;
+            $y = $height - 40; 
+
+            // Отрисовываем текст (цвет черный - [0, 0, 0])
+            $canvas->text($x, $y, $text, $font, $size, [0.5, 0.5, 0.5]);
+        });
+
         $path = $signed === true ? 'signed' : 'original';
 
         // путь относительно storage/app/public
@@ -220,7 +255,8 @@ class AgreementService
             'mediation_contract_parties.is_mediator',
             'mediation_contract_parties.sigex_sign_id',
             'mediation_contract_parties.sigex_sign',
-            'mediation_contract_parties.signed_at'
+            'mediation_contract_parties.signed_at',
+            'mediation_contract_parties.attorney_data'
         )
         ->where('mediation_contract_parties.mediation_contract_id', $mediation_contract->mediation_contract_id)
         ->orderBy('mediation_contract_parties.id', 'asc')
@@ -229,6 +265,10 @@ class AgreementService
         foreach ($contract_parties as $key => $party) {
             if(isset($party->data)){
                 $party->data = json_decode(Crypt::decryptString($party->data));
+            }
+
+            if(isset($party->attorney_data)){
+                $party->data->attorney = json_decode(Crypt::decryptString($party->attorney_data));
             }
 
             if(isset($party->sigex_sign)){
@@ -309,6 +349,36 @@ class AgreementService
         //     $agreement->uuid,
         //     $agreement->created_at->format('d-m-Y')
         // );
+
+        // 1. Сначала подготавливаем PDF и принудительно рендерим, чтобы зафиксировать структуру
+        $dompdf = $pdf->getDomPDF();
+        $dompdf->render(); 
+        $canvas = $dompdf->getCanvas();
+
+        // 2. Используем рабочую для вашей системы функцию page_script
+        $canvas->page_script(function ($pageNumber, $pageCount, $canvas, $fontMetrics) {
+            
+            // Формируем текст нумерации
+            $text = "стр. ". $pageNumber . "/" . $pageCount;
+            
+            // Используем Helvetica, так как она вшита в ядро Dompdf по умолчанию
+            $font = $fontMetrics->getFont("Roboto", "normal");
+            $size = 12;
+
+            // Размеры страницы для расчета координат
+            $width  = $canvas->get_width();
+            $height = $canvas->get_height();
+
+            // Считаем ширину текста, чтобы выровнять его ровно по центру
+            $textWidth = $fontMetrics->getTextWidth($text, $font, $size);
+            
+            // Координаты: центр по горизонтали, и 40 пикселей от низа страницы
+            $x = $width - $textWidth - 40;
+            $y = $height - 40; 
+
+            // Отрисовываем текст (цвет черный - [0, 0, 0])
+            $canvas->text($x, $y, $text, $font, $size, [0.5, 0.5, 0.5]);
+        });
 
         $path = $signed === true ? 'signed' : 'original';
 
