@@ -6,12 +6,12 @@
                         <td style="padding: 10px">
                             @if ($party->is_mediator === 0)
                                 @if($doctype === 'contract')
-                                    <b>Сторона</b>
+                                    <b>Сторона:</b>
                                 @elseif($doctype === 'agreement')
-                                    <b>Сторона-{{$k + 1}}</b>
+                                    <b>Сторона-{{$k + 1}}:</b>
                                 @endif
                             @else
-                                <b>Медиатор</b>
+                                <b>Медиатор:</b>
                             @endif
                             <br>
                             <br>
@@ -22,7 +22,7 @@
                             <br>
 
                             @if(isset($party->data->attorney) && $party->data->attorney->includes === true && isset($party->data->attorney->person))
-                            <b>Представитель</b>
+                            <b>Представитель стороны:</b>
                             <br>
                             Ф.И.О: <b>{{ $party->data->attorney->person->last_name }} {{ $party->data->attorney->person->first_name }} @if (isset($party->data->attorney->person->given_name)){{ $party->data->attorney->person->given_name }}@endif</b>
                             <br>
