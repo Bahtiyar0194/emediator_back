@@ -401,7 +401,7 @@ class AgreementController extends Controller
                         "nullable|required_if:agreement_parties.$index.data.is_legal,true|between:1,10",
                 ]);
 
-                if($request->agreement_parties[$index]['data']['is_legal'] === true && $request->agreement_parties[$index]['data']['attorney']['includes'] === true){
+                if(isset($party['data']['attorney']) && $request->agreement_parties[$index]['data']['attorney']['includes'] === true){
                     $rules = array_merge($rules, [
                         "agreement_parties.$index.data.attorney.type_id" => 'required|numeric',
                         "agreement_parties.$index.data.attorney.num" => 'required',
@@ -635,7 +635,7 @@ class AgreementController extends Controller
             $agreement_id = isset($edit_agreement) ? $edit_agreement->agreement_id : $new_agreement->agreement_id;
 
             foreach ($data['agreement_parties'] as $key => $party) {
-                if($party['data']['is_legal'] === true && isset($party['data']['attorney']) && $party['data']['attorney']['includes'] === true){
+                if(isset($party['data']['attorney']) && $party['data']['attorney']['includes'] === true){
                     $find_representative_iin = User::where('iin', '=', $party['data']['attorney']['person']['iin'])
                     ->first();
 
@@ -706,7 +706,7 @@ class AgreementController extends Controller
                 $new_party = new AgreementParty();
                 $new_party->user_id = isset($find_iin) ? $find_iin->user_id : $new_user->user_id;
 
-                if($party['data']['is_legal'] === true && isset($party['data']['attorney']) && $party['data']['attorney']['includes'] === true){
+                if(isset($party['data']['attorney']) && $party['data']['attorney']['includes'] === true){
                     $new_party->representative_id = isset($find_representative_iin) ? $find_representative_iin->user_id : $new_representative_user->user_id;
                     $new_party->attorney_data = Crypt::encryptString(json_encode($party['data']['attorney']));
                 }
