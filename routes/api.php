@@ -29,6 +29,7 @@ Route::group([
     ], function ($router) {
         Route::post('/get_token', [AuthController::class, 'get_token']);
         Route::post('/get_qr', [AuthController::class, 'get_qr']);
+        Route::post('/send_qr', [AuthController::class, 'send_qr']);
         Route::post('/login', [AuthController::class, 'login']);
 
         Route::group(['middleware' => ['auth:sanctum']], function () {

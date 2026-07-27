@@ -66,6 +66,96 @@ class AuthController extends Controller
         return response()->json($response, 200);
     }
 
+    public function send_qr(Request $request)
+    {
+        // 1. Валидация входных данных
+        $validated = $request->validate([
+            'url'  => 'required|url',
+            'data' => 'required|string', // nonce
+        ]);
+
+        try {
+            // 2. Отправка POST запроса через HTTP Client Laravel
+            $response = Http::acceptJson()->post($validated['url'], [
+                'signMethod'      => 'CMS_SIGN_ONLY',
+                'documentsToSign' => [
+                    [
+                        'id'     => 1,
+                        'nameEn' => 'Authentication on portal Emediator.kz',
+                        'nameRu' => 'Вход в личный кабинет на портале Emediator.kz',
+                        'nameKz' => 'Emediator.kz порталындағы жеке кабинетке өту',
+                        'document' => [
+                            'file' => [
+                                'data' => $validated['data'],
+                                'mime' => '@file/pdf',
+                            ],
+                        ],
+                    ],
+                ],
+            ]);
+
+            // 3. Проверка успешности ответа и наличия signURL
+            if ($response->successful()) {
+                $responseData = $response->json();
+
+                if (isset($responseData['signURL'])) {
+                    // 🚀 Передаем signURL и исходный nonce в отдельную функцию
+                    return $this->sign_qr($responseData['signURL']);
+                }
+
+                return response()->json([
+                    'message' => json_encode($responseData),
+                ], 400);
+            }
+
+            // Ошибка на стороне внешнего сервиса (4xx / 5xx)
+            return response()->json([
+                'message' => $response->json('message') ?? $response->body(),
+            ], $response->status());
+
+        } catch (\Exception $e) {
+            // Ошибка соединения / таймаут
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function sign_qr($url)
+    {
+        try {
+            // Выполняем GET-запрос к signURL
+            $response = Http::acceptJson()->get($url);
+
+            if ($response->successful()) {
+                $data = $response->json();
+
+                // Извлекаем signed data используя опциональное связывание (data_get)
+                $signData = data_get($data, 'documentsToSign.0.document.file.data');
+
+                if ($signData) {
+                    return response()->json([
+                        'message' => 'success',
+                        'data' => $signData,
+                    ], 200);
+                }
+
+                return response()->json([
+                    'message' => json_encode($data),
+                ], 400);
+            }
+
+            return response()->json([
+                'message' => $response->json('message') ?? $response->body(),
+            ], $response->status());
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function login(Request $request){
         $language = Language::where('lang_tag', '=', $request->lang)->first();
 
