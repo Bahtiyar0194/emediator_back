@@ -95,6 +95,11 @@ class AuthController extends Controller
                 ],
             ]);
 
+            info('POST', [
+                'nonce' => $validated['data'],
+                'url' => $validated['url']
+            ]);
+
             // 3. Проверка успешности ответа и наличия signURL
             if ($response->successful()) {
                 $responseData = $response->json();
