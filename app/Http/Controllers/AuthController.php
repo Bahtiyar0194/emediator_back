@@ -77,7 +77,9 @@ class AuthController extends Controller
 
         try {
             // 2. Отправка POST запроса через HTTP Client Laravel
-            $response = Http::acceptJson()->post($validated['url'], [
+            $response = Http::timeout(180) // Увеличиваем таймаут ожидания подключения eGov
+            ->acceptJson()
+            ->post($validated['url'], [
                 'signMethod'      => 'CMS_SIGN_ONLY',
                 'documentsToSign' => [
                     [
