@@ -44,9 +44,9 @@ class AuthController extends Controller
         $response = $client->post($api_url, [
             'body' => json_encode([
                 'description' => 'Authentication Emediator.kz',
-                'whenDone' => [
-                    'backUrl' => env('FRONTEND_URL') . '/auth'
-                ]
+                // 'whenDone' => [
+                //     'backUrl' => env('FRONTEND_URL') . '/auth'
+                // ]
             ]),
             'headers' => [
                 'Content-Type' => 'application/json'
