@@ -72,6 +72,7 @@ class AuthController extends Controller
         $validated = $request->validate([
             'url'  => 'required|url',
             'data' => 'required|string', // nonce
+            'lang' => 'required|string'
         ]);
 
         try {
@@ -100,28 +101,31 @@ class AuthController extends Controller
 
                 if (isset($responseData['signURL'])) {
                     // 🚀 Передаем signURL и исходный nonce в отдельную функцию
-                    return $this->sign_qr($responseData['signURL']);
+                    return $this->sign_qr($responseData['signURL'], $validated['data'], $validated['lang']);
                 }
 
                 return response()->json([
+                    'code' => 4558,
                     'message' => json_encode($responseData),
                 ], 400);
             }
 
             // Ошибка на стороне внешнего сервиса (4xx / 5xx)
             return response()->json([
+                'code' => 4562,
                 'message' => $response->json('message') ?? $response->body(),
             ], $response->status());
 
         } catch (\Exception $e) {
             // Ошибка соединения / таймаут
             return response()->json([
+                'code' => 4560,
                 'message' => $e->getMessage(),
             ], 500);
         }
     }
 
-    public function sign_qr($url)
+    public function sign_qr($url, $nonce, $lang)
     {
         try {
             // Выполняем GET-запрос к signURL
@@ -134,15 +138,14 @@ class AuthController extends Controller
                 $signData = data_get($data, 'documentsToSign.0.document.file.data');
 
                 if ($signData) {
-                    return response()->json([
-                        'message' => 'success',
-                        'data' => $signData,
-                    ], 200);
-                }
+                    $sigex = [
+                        'nonce'     => $nonce,
+                        'signature' => $signData,
+                        'external'  => true,
+                    ];
 
-                return response()->json([
-                    'message' => json_encode($data),
-                ], 400);
+                    return $this->processSigexLogin($sigex, $lang);
+                }
             }
 
             return response()->json([
@@ -151,109 +154,24 @@ class AuthController extends Controller
 
         } catch (\Exception $e) {
             return response()->json([
+                'code' => 4561,
                 'message' => $e->getMessage(),
             ], 500);
         }
     }
 
-    public function login(Request $request){
-        $language = Language::where('lang_tag', '=', $request->lang)->first();
-
+    public function login(Request $request)
+    {
         $validator = Validator::make($request->all(), [
             'sigex' => 'required',
-            'lang' => 'required',
+            'lang'  => 'required',
         ]);
 
-        if($validator->fails()){
+        if ($validator->fails()) {
             return response()->json($validator->errors(), 422);
         }
 
-        $api_url = Config::get('constants.sigex_api').'/auth';
-
-        $response = Http::withHeaders([
-            'Content-Type' => 'application/json',
-        ])->post($api_url, $request->sigex);
-
-        if ($response->successful()) {
-            $response = json_decode($response);
-
-            if(isset($response->userId)){
-
-                $find_iin = User::where('iin', '=', str_replace("IIN", "", $response->userId))
-                ->first();
-
-                if(isset($response->subject)){
-                    $subject = explode(",", $response->subject);
-
-                    if(!isset($find_iin)){
-                        $new_user = new User();
-
-                        foreach($subject as $subject_item){
-                            if(strpos($subject_item, 'CN=') !== false){
-                                $cn = explode(' ', str_replace('CN=', '', $subject_item));
-
-                                $new_user->first_name = mb_ucwords($cn[1]);
-                                $new_user->last_name = mb_ucwords($cn[0]);
-                            }  
-
-                            if(strpos($subject_item, 'GIVENNAME=') !== false){
-                                $new_user->given_name = mb_ucwords(str_replace('GIVENNAME=', '', $subject_item));
-                            }  
-                        }
-
-                        $new_user->iin = str_replace("IIN", "", $response->userId);
-
-                        if(isset($response->businessId)){
-                            $new_user->bin = str_replace("BIN", "", $response->businessId);
-                        }
-
-                        $new_user->lang_id = $language->lang_id;
-                        $new_user->save();
-
-                        $new_user_role = new UserRole();
-                        $new_user_role->user_id = $new_user->user_id;
-                        $new_user_role->role_type_id = 4;
-                        $new_user_role->save();
-
-                        return response()->json(['token' => $new_user->createToken('API Token')->plainTextToken], 200);
-                    }
-                    else{
-                        foreach($subject as $subject_item){
-                            if(strpos($subject_item, 'CN=') !== false){
-                                $cn = explode(' ', str_replace('CN=', '', $subject_item));
-
-                                $find_iin->first_name = mb_ucwords($cn[1]);
-                                $find_iin->last_name = mb_ucwords($cn[0]);
-                            }  
-
-                            if(strpos($subject_item, 'GIVENNAME=') !== false){
-                                $find_iin->given_name = mb_ucwords(str_replace('GIVENNAME=', '', $subject_item));
-                            }  
-                        }
-
-                        if(isset($response->businessId)){
-                            $find_iin->bin = str_replace("BIN", "", $response->businessId);
-                        }
-
-                        $find_iin->save();
-
-                        Auth::login($find_iin);
-
-                        if(auth()->user()->status_type_id == 2){
-                            return response()->json(['auth_failed' => trans('auth.failed')], 401);
-                        }
-
-                        return response()->json(['token' => auth()->user()->createToken('API Token')->plainTextToken], 200);
-                    }
-                }
-            }
-            else{
-                return response()->json(['error' => $response->json()], 400);
-            }
-        }
-        else{
-            return response()->json(['error' => $response->json()], 400);
-        }
+        return $this->processSigexLogin($request->sigex, $request->lang);
     }
 
     public function me(Request $request){
@@ -332,5 +250,99 @@ class AuthController extends Controller
     public function logout(){
         auth()->user()->tokens()->delete();
         return response()->json('Logout successful', 200);
+    }
+
+    // Общая чистая логика авторизации Sigex (принимает обычные массивы/строки)
+    private function processSigexLogin(array $sigexData, string $lang)
+    {
+        $language = Language::where('lang_tag', '=', $lang)->first();
+        $apiUrl = Config::get('constants.sigex_api') . '/auth';
+
+        $response = Http::withHeaders([
+            'Content-Type' => 'application/json',
+        ])->post($apiUrl, $sigexData);
+        
+
+        if (!$response->successful()) {
+            return response()->json([
+                'code' => 4556,
+                'message' => $response->json()
+            ], 400);
+        }
+
+        $responseData = $response->object();
+
+        if (!isset($responseData->userId)) {
+            return response()->json([
+                'code' => 4557,
+                'message' => $response->json(),
+            ], 400);
+        }
+
+        $cleanIin = str_replace("IIN", "", $responseData->userId);
+        $user = User::where('iin', '=', $cleanIin)->first();
+
+        if (isset($responseData->subject)) {
+            $subject = explode(",", $responseData->subject);
+
+            if (! $user) {
+                $user = new User();
+                $this->parseSubjectToUser($subject, $user);
+
+                $user->iin = $cleanIin;
+                if (isset($responseData->businessId)) {
+                    $user->bin = str_replace("BIN", "", $responseData->businessId);
+                }
+                $user->lang_id = $language->lang_id ?? 1;
+                $user->save();
+
+                $newUserRole = new UserRole();
+                $newUserRole->user_id = $user->user_id;
+                $newUserRole->role_type_id = 4;
+                $newUserRole->save();
+
+                return response()->json([
+                    'token' => $user->createToken('API Token')->plainTextToken
+                ], 200);
+            } else {
+                $this->parseSubjectToUser($subject, $user);
+
+                if (isset($responseData->businessId)) {
+                    $user->bin = str_replace("BIN", "", $responseData->businessId);
+                }
+                $user->save();
+
+                Auth::login($user);
+
+                if (auth()->user()->status_type_id == 2) {
+                    return response()->json(['auth_failed' => trans('auth.failed')], 401);
+                }
+
+                return response()->json([
+                    'token' => auth()->user()->createToken('API Token')->plainTextToken
+                ], 200);
+            }
+        }
+
+        return response()->json([
+            'code' => 4559,
+            'message' => 'Subject not found'
+        ], 400);
+    }
+
+    // Вспомогательный метод парсинга CN и GIVENNAME
+    private function parseSubjectToUser(array $subject, User $user): void
+    {
+        foreach ($subject as $item) {
+            if (strpos($item, 'CN=') !== false) {
+                $cn = explode(' ', str_replace('CN=', '', $item));
+                $user->first_name = mb_ucwords($cn[1] ?? '');
+                $user->last_name = mb_ucwords($cn[0] ?? '');
+            }
+
+            if (strpos($item, 'GIVENNAME=') !== false) {
+                $user->given_name = mb_ucwords(str_replace('GIVENNAME=', '', $item));
+            }
+        }
     }
 }
