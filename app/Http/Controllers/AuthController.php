@@ -147,7 +147,7 @@ class AuthController extends Controller
 
         // Если этот nonce уже обрабатывался в последние 15 секунд — просто игнорируем дубль!
         if (!Cache::add($lockKey, true, 15)) {
-            info('Игнорируем дублирующий POST запрос от браузера для nonce: ' . $validated['data']);
+            info('Игнорируем дублирующий POST запрос от браузера для nonce: ' . $validated['nonce']);
             
             return response()->json([
                 'message' => 'Duplicate request ignored'
