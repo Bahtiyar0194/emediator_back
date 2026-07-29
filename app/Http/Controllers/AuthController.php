@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Crypt;
 use App\Models\User;
 use App\Models\UserRole;
 use App\Models\Language;
+use App\Models\TempAuthToken;
 
 class AuthController extends Controller
 {
@@ -71,8 +72,7 @@ class AuthController extends Controller
         // 1. Валидация входных данных
         $validated = $request->validate([
             'url'  => 'required|url',
-            'data' => 'required|string', // nonce
-            'lang' => 'required|string'
+            'data' => 'required|string',
         ]);
 
         try {
@@ -95,18 +95,20 @@ class AuthController extends Controller
                 ],
             ]);
 
-            info('POST', [
-                'nonce' => $validated['data'],
-                'url' => $validated['url']
-            ]);
+            // info('POST', [
+            //     'nonce' => $validated['data'],
+            //     'url' => $validated['url']
+            // ]);
 
             // 3. Проверка успешности ответа и наличия signURL
             if ($response->successful()) {
                 $responseData = $response->json();
 
                 if (isset($responseData['signURL'])) {
-                    // 🚀 Передаем signURL и исходный nonce в отдельную функцию
-                    return $this->sign_qr($responseData['signURL'], $validated['data'], $validated['lang']);
+                    return response()->json([
+                        'status' => 'success',
+                        'url' => $responseData['signURL']
+                    ], 200);
                 }
 
                 return response()->json([
@@ -130,11 +132,18 @@ class AuthController extends Controller
         }
     }
 
-    public function sign_qr($url, $nonce, $lang)
+    public function sign_qr(Request $request)
     {
+        // 1. Валидация входных данных
+        $validated = $request->validate([
+            'url'  => 'required|url',
+            'nonce' => 'required|string', // nonce
+            'lang' => 'required|string'
+        ]);
+
         try {
             // Выполняем GET-запрос к signURL
-            $response = Http::acceptJson()->get($url);
+            $response = Http::acceptJson()->get($validated['url']);
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -144,12 +153,12 @@ class AuthController extends Controller
 
                 if ($signData) {
                     $sigex = [
-                        'nonce'     => $nonce,
+                        'nonce'     => $validated['nonce'],
                         'signature' => $signData,
                         'external'  => true,
                     ];
 
-                    return $this->processSigexLogin($sigex, $lang);
+                    return $this->processSigexLogin($sigex, $validated['lang']);
                 }
             }
 
