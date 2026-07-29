@@ -142,16 +142,13 @@ class AuthController extends Controller
             'lang' => 'required|string'
         ]);
 
-        // Создаем ключ блокировки по nonce
-        $lockKey = 'qr_send_lock_' . md5($validated['nonce']);
+        $temp_token = TempAuthToken::where('data', '=', $validated['nonce'])
+        ->first();
 
-        // Если этот nonce уже обрабатывался в последние 15 секунд — просто игнорируем дубль!
-        if (!Cache::add($lockKey, true, 15)) {
-            info('Игнорируем дублирующий POST запрос от браузера для nonce: ' . $validated['nonce']);
-            
+        if(isset($temp_token)){
             return response()->json([
-                'message' => 'Duplicate request ignored'
-            ], 200); // Или 429
+                'token' => $temp_token->token
+            ], 200);
         }
 
         try {
@@ -176,7 +173,7 @@ class AuthController extends Controller
                         'external'  => true,
                     ];
 
-                    return $this->processSigexLogin($sigex, $validated['lang']);
+                    return $this->processSigexLogin($sigex, $validated['lang'], true);
                 }
             }
 
@@ -203,7 +200,7 @@ class AuthController extends Controller
             return response()->json($validator->errors(), 422);
         }
 
-        return $this->processSigexLogin($request->sigex, $request->lang);
+        return $this->processSigexLogin($request->sigex, $request->lang, false);
     }
 
     public function me(Request $request){
@@ -285,7 +282,7 @@ class AuthController extends Controller
     }
 
     // Общая чистая логика авторизации Sigex (принимает обычные массивы/строки)
-    private function processSigexLogin(array $sigexData, string $lang)
+    private function processSigexLogin(array $sigexData, string $lang, $temp_token)
     {
         $language = Language::where('lang_tag', '=', $lang)->first();
         $apiUrl = Config::get('constants.sigex_api') . '/auth';
@@ -333,8 +330,17 @@ class AuthController extends Controller
                 $newUserRole->role_type_id = 4;
                 $newUserRole->save();
 
+                $token = $user->createToken('API Token')->plainTextToken;
+
+                if($temp_token === true){
+                    $newTempAuthToken = new TempAuthToken();
+                    $newTempAuthToken->data = $sigexData->nonce;
+                    $newTempAuthToken->token = $token;
+                    $newTempAuthToken->save();
+                }
+
                 return response()->json([
-                    'token' => $user->createToken('API Token')->plainTextToken
+                    'token' => $token
                 ], 200);
             } else {
                 $this->parseSubjectToUser($subject, $user);
@@ -350,8 +356,17 @@ class AuthController extends Controller
                     return response()->json(['auth_failed' => trans('auth.failed')], 401);
                 }
 
+                $token = auth()->user()->createToken('API Token')->plainTextToken;
+
+                if($temp_token === true){
+                    $newTempAuthToken = new TempAuthToken();
+                    $newTempAuthToken->data = $sigexData->nonce;
+                    $newTempAuthToken->token = $token;
+                    $newTempAuthToken->save();
+                }
+
                 return response()->json([
-                    'token' => auth()->user()->createToken('API Token')->plainTextToken
+                    'token' => $token
                 ], 200);
             }
         }
