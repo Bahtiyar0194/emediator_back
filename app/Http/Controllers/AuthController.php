@@ -142,14 +142,14 @@ class AuthController extends Controller
             'lang' => 'required|string'
         ]);
 
-        // $temp_token = TempAuthToken::where('data', '=', $validated['nonce'])
-        // ->first();
+        $temp_token = TempAuthToken::where('data', '=', $validated['nonce'])
+        ->first();
 
-        // if(isset($temp_token)){
-        //     return response()->json([
-        //         'token' => $temp_token->token
-        //     ], 200);
-        // }
+        if(isset($temp_token)){
+            return response()->json([
+                'token' => $temp_token->token
+            ], 200);
+        }
 
         try {
             // Выполняем GET-запрос к signURL
