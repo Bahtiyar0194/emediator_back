@@ -95,10 +95,10 @@ class AuthController extends Controller
                 ],
             ]);
 
-            // info('POST', [
-            //     'nonce' => $validated['data'],
-            //     'url' => $validated['url']
-            // ]);
+            info('POST', [
+                'nonce' => $validated['data'],
+                'url' => $validated['url']
+            ]);
 
             // 3. Проверка успешности ответа и наличия signURL
             if ($response->successful()) {
@@ -144,6 +144,11 @@ class AuthController extends Controller
         try {
             // Выполняем GET-запрос к signURL
             $response = Http::acceptJson()->get($validated['url']);
+
+            info('GET', [
+                'nonce' => $validated['nonce'],
+                'url' => $validated['url']
+            ]);
 
             if ($response->successful()) {
                 $data = $response->json();
