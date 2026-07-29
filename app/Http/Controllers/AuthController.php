@@ -142,14 +142,14 @@ class AuthController extends Controller
             'lang' => 'required|string'
         ]);
 
-        $temp_token = TempAuthToken::where('data', '=', $validated['nonce'])
-        ->first();
+        // $temp_token = TempAuthToken::where('data', '=', $validated['nonce'])
+        // ->first();
 
-        if(isset($temp_token)){
-            return response()->json([
-                'token' => $temp_token->token
-            ], 200);
-        }
+        // if(isset($temp_token)){
+        //     return response()->json([
+        //         'token' => $temp_token->token
+        //     ], 200);
+        // }
 
         try {
             // Выполняем GET-запрос к signURL
@@ -334,7 +334,7 @@ class AuthController extends Controller
 
                 if($temp_token === true){
                     $newTempAuthToken = new TempAuthToken();
-                    $newTempAuthToken->data = $sigexData->nonce;
+                    $newTempAuthToken->data = $sigexData['nonce'];
                     $newTempAuthToken->token = $token;
                     $newTempAuthToken->save();
                 }
@@ -360,7 +360,7 @@ class AuthController extends Controller
 
                 if($temp_token === true){
                     $newTempAuthToken = new TempAuthToken();
-                    $newTempAuthToken->data = $sigexData->nonce;
+                    $newTempAuthToken->data = $sigexData['nonce'];
                     $newTempAuthToken->token = $token;
                     $newTempAuthToken->save();
                 }
