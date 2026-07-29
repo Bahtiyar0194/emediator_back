@@ -9,6 +9,7 @@ use Validator;
 use Illuminate\Support\Facades\Auth;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Cache;
 
 use App\Models\User;
 use App\Models\UserRole;
@@ -140,6 +141,18 @@ class AuthController extends Controller
             'nonce' => 'required|string', // nonce
             'lang' => 'required|string'
         ]);
+
+        // Создаем ключ блокировки по nonce
+        $lockKey = 'qr_send_lock_' . md5($validated['nonce']);
+
+        // Если этот nonce уже обрабатывался в последние 15 секунд — просто игнорируем дубль!
+        if (!Cache::add($lockKey, true, 15)) {
+            info('Игнорируем дублирующий POST запрос от браузера для nonce: ' . $validated['data']);
+            
+            return response()->json([
+                'message' => 'Duplicate request ignored'
+            ], 200); // Или 429
+        }
 
         try {
             // Выполняем GET-запрос к signURL
