@@ -52,7 +52,7 @@ class AuthController extends Controller
             'body' => json_encode([
                 'description' => 'Authentication Emediator.kz',
                 'whenDone' => [
-                    'backUrl' => env('FRONTEND_URL') . '/auth?t='.$validated['data']
+                    'backUrl' => env('FRONTEND_URL') . '/auth?t='.Crypt::encryptString($validated['data'])
                 ]
             ]),
             'headers' => [
@@ -223,7 +223,7 @@ class AuthController extends Controller
             return response()->json($validator->errors(), 422);
         }
 
-        $temp_token = TempSignToken::where('data', '=', Crypt::encryptString($request['token']))
+        $temp_token = TempSignToken::where('data', '=', $request['token'])
         ->first();
 
         if(isset($temp_token)){
