@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Cache;
 use App\Models\User;
 use App\Models\UserRole;
 use App\Models\Language;
-use App\Models\TempAuthToken;
+use App\Models\TempSignToken;
 
 class AuthController extends Controller
 {
@@ -37,6 +37,11 @@ class AuthController extends Controller
     }
 
     public function get_qr(Request $request){
+        // 1. Валидация входных данных
+        $validated = $request->validate([
+            'data' => 'required|string',
+        ]);
+
         $api_url = Config::get('constants.sigex_api').'/egovQr';
 
         $client = new Client([
@@ -46,9 +51,9 @@ class AuthController extends Controller
         $response = $client->post($api_url, [
             'body' => json_encode([
                 'description' => 'Authentication Emediator.kz',
-                // 'whenDone' => [
-                //     'backUrl' => env('FRONTEND_URL') . '/auth'
-                // ]
+                'whenDone' => [
+                    'backUrl' => env('FRONTEND_URL') . '/auth?t='.$validated['data']
+                ]
             ]),
             'headers' => [
                 'Content-Type' => 'application/json'
@@ -56,6 +61,12 @@ class AuthController extends Controller
         ])->getBody()->getContents();
 
         $response = json_decode($response);
+
+        if(isset($response->signURL)){
+            $newTempSignToken = new TempSignToken();
+            $newTempSignToken->data = Crypt::encryptString($validated['data']);
+            $newTempSignToken->save();
+        }
 
         $qrId = str_replace('https://sigex.kz/api/egovQr/', '', $response->signURL);
 
@@ -68,12 +79,12 @@ class AuthController extends Controller
         return response()->json($response, 200);
     }
 
-    public function send_qr(Request $request)
-    {
+    public function send_qr(Request $request){
         // 1. Валидация входных данных
         $validated = $request->validate([
             'url'  => 'required|url',
             'data' => 'required|string',
+            'title' => 'required|array'
         ]);
 
         try {
@@ -83,9 +94,9 @@ class AuthController extends Controller
                 'documentsToSign' => [
                     [
                         'id'     => 1,
-                        'nameEn' => 'Authentication on portal Emediator.kz',
-                        'nameRu' => 'Вход в личный кабинет на портале Emediator.kz',
-                        'nameKz' => 'Emediator.kz порталындағы жеке кабинетке өту',
+                        'nameEn' => $validated['title']['nameEn'],
+                        'nameRu' => $validated['title']['nameRu'],
+                        'nameKz' => $validated['title']['nameKz'],
                         'document' => [
                             'file' => [
                                 'data' => $validated['data'],
@@ -96,10 +107,10 @@ class AuthController extends Controller
                 ],
             ]);
 
-            info('POST', [
-                'nonce' => $validated['data'],
-                'url' => $validated['url']
-            ]);
+            // info('POST', [
+            //     'nonce' => $validated['data'],
+            //     'url' => $validated['url']
+            // ]);
 
             // 3. Проверка успешности ответа и наличия signURL
             if ($response->successful()) {
@@ -133,21 +144,21 @@ class AuthController extends Controller
         }
     }
 
-    public function sign_qr(Request $request)
-    {
+    public function sign_qr(Request $request){
         // 1. Валидация входных данных
         $validated = $request->validate([
             'url'  => 'required|url',
-            'nonce' => 'required|string', // nonce
+            'data' => 'required|string', // nonce если auth
             'lang' => 'required|string'
         ]);
 
-        $temp_token = TempAuthToken::where('data', '=', $validated['nonce'])
+        $temp_token = TempSignToken::where('data', '=', Crypt::encryptString($validated['data']))
         ->first();
 
-        if(isset($temp_token)){
+        if(isset($temp_token) && isset($temp_token->token)){
             return response()->json([
-                'token' => $temp_token->token
+                'status' => 'success',
+                'token' => Crypt::decryptString($temp_token->token)
             ], 200);
         }
 
@@ -155,10 +166,10 @@ class AuthController extends Controller
             // Выполняем GET-запрос к signURL
             $response = Http::acceptJson()->get($validated['url']);
 
-            info('GET', [
-                'nonce' => $validated['nonce'],
-                'url' => $validated['url']
-            ]);
+            // info('GET', [
+            //     'data' => $validated['data'],
+            //     'url' => $validated['url']
+            // ]);
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -168,7 +179,7 @@ class AuthController extends Controller
 
                 if ($signData) {
                     $sigex = [
-                        'nonce'     => $validated['nonce'],
+                        'nonce'     => $validated['data'],
                         'signature' => $signData,
                         'external'  => true,
                     ];
@@ -189,8 +200,7 @@ class AuthController extends Controller
         }
     }
 
-    public function login(Request $request)
-    {
+    public function login(Request $request){
         $validator = Validator::make($request->all(), [
             'sigex' => 'required',
             'lang'  => 'required',
@@ -201,6 +211,33 @@ class AuthController extends Controller
         }
 
         return $this->processSigexLogin($request->sigex, $request->lang, false);
+    }
+
+    public function by_token(Request $request){
+        $validator = Validator::make($request->all(), [
+            'token' => 'required|string',
+            'lang' => 'required'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 422);
+        }
+
+        $temp_token = TempSignToken::where('data', '=', Crypt::encryptString($request['token']))
+        ->first();
+
+        if(isset($temp_token)){
+            return response()->json([
+                'status' => 'success',
+                'token' => Crypt::decryptString($temp_token->token)
+            ], 200);
+        }
+        else{
+            return response()->json([
+                'code' => 4800,
+                'message' => 'Token has expired',
+            ], 400);
+        }
     }
 
     public function me(Request $request){
@@ -237,8 +274,7 @@ class AuthController extends Controller
         return response()->json($user, 200);
     }
 
-    public function change_mode(Request $request)
-    {
+    public function change_mode(Request $request){
         $user = auth()->user();
         $role_found = false;
 
@@ -263,8 +299,7 @@ class AuthController extends Controller
         }
     }
 
-    public function change_language(Request $request)
-    {
+    public function change_language(Request $request){
         $user = auth()->user();
 
         $language = Language::where('lang_tag', '=', $request->lang_tag)->first();
@@ -282,8 +317,7 @@ class AuthController extends Controller
     }
 
     // Общая чистая логика авторизации Sigex (принимает обычные массивы/строки)
-    private function processSigexLogin(array $sigexData, string $lang, $temp_token)
-    {
+    private function processSigexLogin(array $sigexData, string $lang, $temp_token){
         $language = Language::where('lang_tag', '=', $lang)->first();
         $apiUrl = Config::get('constants.sigex_api') . '/auth';
 
@@ -333,10 +367,13 @@ class AuthController extends Controller
                 $token = $user->createToken('API Token')->plainTextToken;
 
                 if($temp_token === true){
-                    $newTempAuthToken = new TempAuthToken();
-                    $newTempAuthToken->data = $sigexData['nonce'];
-                    $newTempAuthToken->token = $token;
-                    $newTempAuthToken->save();
+                    $findTempSignToken = TempSignToken::where('data', '=', Crypt::encryptString($sigexData['nonce']))
+                    ->first();
+
+                    if(isset($findTempSignToken)){
+                        $findTempSignToken->token = Crypt::encryptString($token);
+                        $findTempSignToken->save();
+                    }
                 }
 
                 return response()->json([
@@ -359,10 +396,13 @@ class AuthController extends Controller
                 $token = auth()->user()->createToken('API Token')->plainTextToken;
 
                 if($temp_token === true){
-                    $newTempAuthToken = new TempAuthToken();
-                    $newTempAuthToken->data = $sigexData['nonce'];
-                    $newTempAuthToken->token = $token;
-                    $newTempAuthToken->save();
+                    $findTempSignToken = TempSignToken::where('data', '=', Crypt::encryptString($sigexData['nonce']))
+                    ->first();
+
+                    if(isset($findTempSignToken)){
+                        $findTempSignToken->token = Crypt::encryptString($token);
+                        $findTempSignToken->save();
+                    }
                 }
 
                 return response()->json([

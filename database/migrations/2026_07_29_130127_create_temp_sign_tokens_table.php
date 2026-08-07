@@ -4,7 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-class CreateTempAuthTokensTable extends Migration
+class CreateTempSignTokensTable extends Migration
 {
     /**
      * Run the migrations.
@@ -13,10 +13,10 @@ class CreateTempAuthTokensTable extends Migration
      */
     public function up()
     {
-        Schema::create('temp_auth_tokens', function (Blueprint $table) {
+        Schema::create('temp_sign_tokens', function (Blueprint $table) {
             $table->increments('token_id');
-            $table->string('data');
-            $table->string('token')->nullable();
+            $table->text('data');
+            $table->text('token')->nullable();
             $table->timestamps();
         });
     }
@@ -28,6 +28,6 @@ class CreateTempAuthTokensTable extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('temp_auth_tokens');
+        Schema::dropIfExists('temp_sign_tokens');
     }
 }
