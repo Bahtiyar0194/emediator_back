@@ -48,13 +48,11 @@ class AuthController extends Controller
             'headers' => ['Content-Type' => 'application/json']
         ]);
 
-        $cryptData = Crypt::encryptString($validated['data']);
-
         $response = $client->post($api_url, [
             'body' => json_encode([
                 'description' => 'Authentication Emediator.kz',
                 'whenDone' => [
-                    'backUrl' => env('FRONTEND_URL') . '/auth?t='.$cryptData
+                    'backUrl' => env('FRONTEND_URL') . '/auth?t='.$validated['data']
                 ]
             ]),
             'headers' => [
@@ -66,7 +64,7 @@ class AuthController extends Controller
 
         if(isset($response->signURL)){
             $newTempSignToken = new TempSignToken();
-            $newTempSignToken->data = $cryptData;
+            $newTempSignToken->data = $validated['data'];
             $newTempSignToken->save();
         }
 
@@ -154,7 +152,7 @@ class AuthController extends Controller
             'lang' => 'required|string'
         ]);
 
-        $temp_token = TempSignToken::where('data', '=', Crypt::encryptString($validated['data']))
+        $temp_token = TempSignToken::where('data', '=', $validated['data'])
         ->first();
 
         if(isset($temp_token) && isset($temp_token->token)){
@@ -225,7 +223,7 @@ class AuthController extends Controller
             return response()->json($validator->errors(), 422);
         }
 
-        $temp_token =c::where('data', '=', $request['token'])
+        $temp_token = TempSignToken::where('data', '=', $request['token'])
         ->first();
 
         if(isset($temp_token)){
@@ -369,7 +367,7 @@ class AuthController extends Controller
                 $token = $user->createToken('API Token')->plainTextToken;
 
                 if($temp_token === true){
-                    $findTempSignToken = TempSignToken::where('data', '=', Crypt::encryptString($sigexData['nonce']))
+                    $findTempSignToken = TempSignToken::where('data', '=', $sigexData['nonce'])
                     ->first();
 
                     if(isset($findTempSignToken)){
@@ -398,7 +396,7 @@ class AuthController extends Controller
                 $token = auth()->user()->createToken('API Token')->plainTextToken;
 
                 if($temp_token === true){
-                    $findTempSignToken = TempSignToken::where('data', '=', Crypt::encryptString($sigexData['nonce']))
+                    $findTempSignToken = TempSignToken::where('data', '=', $sigexData['nonce'])
                     ->first();
 
                     if(isset($findTempSignToken)){
