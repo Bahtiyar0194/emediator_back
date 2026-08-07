@@ -48,11 +48,13 @@ class AuthController extends Controller
             'headers' => ['Content-Type' => 'application/json']
         ]);
 
+        $cryptData = Crypt::encryptString($validated['data']);
+
         $response = $client->post($api_url, [
             'body' => json_encode([
                 'description' => 'Authentication Emediator.kz',
                 'whenDone' => [
-                    'backUrl' => env('FRONTEND_URL') . '/auth?t='.Crypt::encryptString($validated['data'])
+                    'backUrl' => env('FRONTEND_URL') . '/auth?t='.$cryptData
                 ]
             ]),
             'headers' => [
@@ -64,7 +66,7 @@ class AuthController extends Controller
 
         if(isset($response->signURL)){
             $newTempSignToken = new TempSignToken();
-            $newTempSignToken->data = Crypt::encryptString($validated['data']);
+            $newTempSignToken->data = $cryptData;
             $newTempSignToken->save();
         }
 
@@ -223,7 +225,7 @@ class AuthController extends Controller
             return response()->json($validator->errors(), 422);
         }
 
-        $temp_token = TempSignToken::where('data', '=', $request['token'])
+        $temp_token =c::where('data', '=', $request['token'])
         ->first();
 
         if(isset($temp_token)){
