@@ -48,11 +48,13 @@ class AuthController extends Controller
             'headers' => ['Content-Type' => 'application/json']
         ]);
 
+        $cryptedData = hash_hmac('sha256', $validated['data'], config('app.key'));
+
         $response = $client->post($api_url, [
             'body' => json_encode([
                 'description' => 'Authentication Emediator.kz',
                 'whenDone' => [
-                    'backUrl' => env('FRONTEND_URL') . '/auth?t='.$validated['data']
+                    'backUrl' => env('FRONTEND_URL') . '/auth?t='.$cryptedData
                 ]
             ]),
             'headers' => [
@@ -64,7 +66,7 @@ class AuthController extends Controller
 
         if(isset($response->signURL)){
             $newTempSignToken = new TempSignToken();
-            $newTempSignToken->data = $validated['data'];
+            $newTempSignToken->data = $cryptedData;
             $newTempSignToken->save();
         }
 
@@ -152,7 +154,9 @@ class AuthController extends Controller
             'lang' => 'required|string'
         ]);
 
-        $temp_token = TempSignToken::where('data', '=', $validated['data'])
+        $cryptedData = hash_hmac('sha256', $validated['data'], config('app.key'));
+
+        $temp_token = TempSignToken::where('data', '=', $cryptedData)
         ->first();
 
         if(isset($temp_token) && isset($temp_token->token)){
@@ -367,7 +371,10 @@ class AuthController extends Controller
                 $token = $user->createToken('API Token')->plainTextToken;
 
                 if($temp_token === true){
-                    $findTempSignToken = TempSignToken::where('data', '=', $sigexData['nonce'])
+
+                    $cryptedData = hash_hmac('sha256', $sigexData['nonce'], config('app.key'));
+
+                    $findTempSignToken = TempSignToken::where('data', '=', $cryptedData)
                     ->first();
 
                     if(isset($findTempSignToken)){
@@ -396,7 +403,10 @@ class AuthController extends Controller
                 $token = auth()->user()->createToken('API Token')->plainTextToken;
 
                 if($temp_token === true){
-                    $findTempSignToken = TempSignToken::where('data', '=', $sigexData['nonce'])
+
+                    $cryptedData = hash_hmac('sha256', $sigexData['nonce'], config('app.key'));
+
+                    $findTempSignToken = TempSignToken::where('data', '=', $cryptedData)
                     ->first();
 
                     if(isset($findTempSignToken)){
