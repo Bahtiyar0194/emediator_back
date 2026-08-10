@@ -55,7 +55,7 @@ class AuthController extends Controller
             'body' => json_encode([
                 'description' => 'Authentication Emediator.kz',
                 'whenDone' => [
-                    'backUrl' => $validated['data'] === 'auth' ? env('FRONTEND_URL') . '/auth?t='.$cryptedData : env('FRONTEND_URL') . '/dashboard?d='.$cryptedData
+                    'backUrl' => $validated['mode'] === 'auth' ? env('FRONTEND_URL') . '/auth?t='.$cryptedData : env('FRONTEND_URL') . '/dashboard?d='.$cryptedData
                 ]
             ]),
             'headers' => [
