@@ -40,6 +40,7 @@ class AuthController extends Controller
         // 1. Валидация входных данных
         $validated = $request->validate([
             'data' => 'required|string',
+            'mode' => 'required|string' // auth or sign
         ]);
 
         $api_url = Config::get('constants.sigex_api').'/egovQr';
@@ -54,7 +55,7 @@ class AuthController extends Controller
             'body' => json_encode([
                 'description' => 'Authentication Emediator.kz',
                 'whenDone' => [
-                    'backUrl' => env('FRONTEND_URL') . '/auth?t='.$cryptedData
+                    'backUrl' => $validated['data'] === 'auth' ? env('FRONTEND_URL') . '/auth?t='.$cryptedData : env('FRONTEND_URL') . '/dashboard?d='.$cryptedData
                 ]
             ]),
             'headers' => [
@@ -151,7 +152,8 @@ class AuthController extends Controller
         $validated = $request->validate([
             'url'  => 'required|url',
             'data' => 'required|string', // nonce если auth
-            'lang' => 'required|string'
+            'lang' => 'required|string',
+            'mode' => 'required|string' // auth or sign
         ]);
 
         $cryptedData = hash_hmac('sha256', $validated['data'], config('app.key'));
@@ -182,13 +184,28 @@ class AuthController extends Controller
                 $signData = data_get($data, 'documentsToSign.0.document.file.data');
 
                 if ($signData) {
-                    $sigex = [
-                        'nonce'     => $validated['data'],
-                        'signature' => $signData,
-                        'external'  => true,
-                    ];
 
-                    return $this->processSigexLogin($sigex, $validated['lang'], true);
+                    if($validated['mode'] === 'auth'){
+                        $sigex = [
+                            'nonce'     => $validated['data'],
+                            'signature' => $signData,
+                            'external'  => true,
+                        ];
+
+                        return $this->processSigexLogin($sigex, $validated['lang'], true);
+                    }
+                    else{
+                        return response()->json([
+                            'status' => 'success',
+                            'token' => $signData
+                        ], 200);
+                    }
+                }
+                else{
+                    return response()->json([
+                        'code' => 4563,
+                        'message' => 'Sign data is not defined',
+                    ], 500);
                 }
             }
 
