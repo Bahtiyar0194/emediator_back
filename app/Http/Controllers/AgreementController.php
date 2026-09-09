@@ -371,7 +371,7 @@ class AgreementController extends Controller
                     "agreement_parties.$index.data.phone" => 'required|regex:/^((?!_).)*$/s',
                     "agreement_parties.$index.data.location.id" => 'required|numeric',
                     "agreement_parties.$index.data.location.street" => 'required|string|between:2,100',
-                    "agreement_parties.$index.data.location.house" => 'required|regex:/^\d+(\/\d+)?$/',
+                    "agreement_parties.$index.data.location.house" => 'required',
 
                     "agreement_parties.$index.data.location.village" =>
                         "nullable|required_if:agreement_parties.$index.data.location.is_district,true|string",
@@ -398,7 +398,7 @@ class AgreementController extends Controller
                         "nullable|required_if:agreement_parties.$index.data.is_legal,true|string|between:2,100",
 
                     "agreement_parties.$index.data.company_location.building" =>
-                        "nullable|required_if:agreement_parties.$index.data.is_legal,true|between:1,10",
+                        "nullable|required_if:agreement_parties.$index.data.is_legal,true",
                 ]);
 
                 if(isset($party['data']['attorney']) && $request->agreement_parties[$index]['data']['attorney']['includes'] === true){
@@ -412,7 +412,7 @@ class AgreementController extends Controller
                         "agreement_parties.$index.data.attorney.person.data.phone" => 'required|regex:/^((?!_).)*$/s',
                         "agreement_parties.$index.data.attorney.person.data.location.id" => 'required|numeric',
                         "agreement_parties.$index.data.attorney.person.data.location.street" => 'required|string|between:2,100',
-                        "agreement_parties.$index.data.attorney.person.data.location.house" => 'required|regex:/^\d+(\/\d+)?$/',
+                        "agreement_parties.$index.data.attorney.person.data.location.house" => 'required',
                     ]);
                 }
             }
