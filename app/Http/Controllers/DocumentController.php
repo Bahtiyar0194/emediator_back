@@ -151,7 +151,7 @@ class DocumentController extends Controller
                 })
                 ->first();
 
-                if(!isset($isParty)){
+                if(!$authUser->hasRole(['super_admin', 'admin']) || !isset($isParty)){
                     return response()->json([
                         'message' => 'Access denied'
                     ], 403);
@@ -166,7 +166,7 @@ class DocumentController extends Controller
                 })
                 ->first();
 
-                if(!isset($isParty)){
+                if(!$authUser->hasRole(['super_admin', 'admin']) || !isset($isParty)){
                     return response()->json([
                         'message' => 'Access denied'
                     ], 403);
