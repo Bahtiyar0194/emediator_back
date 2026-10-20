@@ -155,57 +155,61 @@ class AgreementController extends Controller
         $sortDirection = $request->input('sort_direction', 'asc');  // Направление по умолчанию
 
         $agreements = Agreement::leftJoin('agreement_parties', 'agreements.agreement_id', '=', 'agreement_parties.agreement_id')
-            ->leftJoin('types_of_agreements', 'agreements.agreement_type_id', '=', 'types_of_agreements.agreement_type_id')
-            ->leftJoin('types_of_agreements_lang', 'types_of_agreements.agreement_type_id', '=', 'types_of_agreements_lang.agreement_type_id')
-            ->leftJoin('users as initiator', 'agreements.initiator_id', '=', 'initiator.user_id')
+        ->leftJoin('types_of_agreements', 'agreements.agreement_type_id', '=', 'types_of_agreements.agreement_type_id')
+        ->leftJoin('types_of_agreements_lang', 'types_of_agreements.agreement_type_id', '=', 'types_of_agreements_lang.agreement_type_id')
+        ->leftJoin('users as initiator', 'agreements.initiator_id', '=', 'initiator.user_id')
 
-            // ✅ статус agreement
-            ->leftJoin('types_of_status as agreement_status', 'agreements.status_type_id', '=', 'agreement_status.status_type_id')
-            ->leftJoin('types_of_status_lang as agreement_status_lang', function ($join) use ($language) {
-                $join->on('agreement_status.status_type_id', '=', 'agreement_status_lang.status_type_id')
-                    ->where('agreement_status_lang.lang_id', $language->lang_id);
-            })
+        // ✅ статус agreement
+        ->leftJoin('types_of_status as agreement_status', 'agreements.status_type_id', '=', 'agreement_status.status_type_id')
+        ->leftJoin('types_of_status_lang as agreement_status_lang', function ($join) use ($language) {
+            $join->on('agreement_status.status_type_id', '=', 'agreement_status_lang.status_type_id')
+                ->where('agreement_status_lang.lang_id', $language->lang_id);
+        })
 
-            // ✅ контракт
-            ->leftJoin('mediation_contracts', 'agreements.agreement_id', '=', 'mediation_contracts.agreement_id')
+        // ✅ контракт
+        ->leftJoin('mediation_contracts', 'agreements.agreement_id', '=', 'mediation_contracts.agreement_id')
 
-            // ✅ статус contract
-            ->leftJoin('types_of_status as contract_status', 'mediation_contracts.status_type_id', '=', 'contract_status.status_type_id')
-            ->leftJoin('types_of_status_lang as contract_status_lang', function ($join) use ($language) {
-                $join->on('contract_status.status_type_id', '=', 'contract_status_lang.status_type_id')
-                    ->where('contract_status_lang.lang_id', $language->lang_id);
-            })
+        // ✅ статус contract
+        ->leftJoin('types_of_status as contract_status', 'mediation_contracts.status_type_id', '=', 'contract_status.status_type_id')
+        ->leftJoin('types_of_status_lang as contract_status_lang', function ($join) use ($language) {
+            $join->on('contract_status.status_type_id', '=', 'contract_status_lang.status_type_id')
+                ->where('contract_status_lang.lang_id', $language->lang_id);
+        })
 
-            // ✅ кастомный шаблон
-            ->leftJoin('custom_agreement_templates', 'agreements.custom_template_id', '=', 'custom_agreement_templates.template_id')
+        // ✅ кастомный шаблон
+        ->leftJoin('custom_agreement_templates', 'agreements.custom_template_id', '=', 'custom_agreement_templates.template_id')
 
-            ->select(
-                'agreements.uuid',
-                'agreements.custom_template_id',
-                'initiator.first_name as initiator_first_name',
-                'initiator.last_name as initiator_last_name',
-                'types_of_agreements_lang.agreement_type_name',
-                'agreements.created_at',
-                'agreements.custom_template_id',
-                'custom_agreement_templates.template_name',
+        ->select(
+            'agreements.uuid',
+            'agreements.custom_template_id',
+            'initiator.first_name as initiator_first_name',
+            'initiator.last_name as initiator_last_name',
+            'types_of_agreements_lang.agreement_type_name',
+            'agreements.created_at',
+            'agreements.custom_template_id',
+            'custom_agreement_templates.template_name',
 
-                // 👇 статусы
-                'agreements.status_type_id as agreement_status_id',
-                'agreement_status.color as agreement_status_color',
-                'agreement_status_lang.status_type_name as agreement_status_name',
+            // 👇 статусы
+            'agreements.status_type_id as agreement_status_id',
+            'agreement_status.color as agreement_status_color',
+            'agreement_status_lang.status_type_name as agreement_status_name',
 
-                'mediation_contracts.status_type_id as contract_status_id',
-                'contract_status.color as contract_status_color',
-                'contract_status_lang.status_type_name as contract_status_name',
-            )
+            'mediation_contracts.status_type_id as contract_status_id',
+            'contract_status.color as contract_status_color',
+            'contract_status_lang.status_type_name as contract_status_name',
+        );
+
+        if(!isset($request->show_all_agreements)){
             // Группируем условия через функцию-замыкание для правильных скобок в SQL
-            ->where(function ($query) use ($auth_user) {
+            $agreements->where(function ($query) use ($auth_user) {
                 $query->where('agreement_parties.user_id', $auth_user->user_id)
                 ->orWhere('agreement_parties.representative_id', $auth_user->user_id);
-            })
-            ->where('types_of_agreements_lang.lang_id', $language->lang_id)
-            ->distinct()
-            ->orderBy($sortKey, $sortDirection);
+            });
+        }
+        
+        $agreements->where('types_of_agreements_lang.lang_id', $language->lang_id)
+        ->distinct()
+        ->orderBy($sortKey, $sortDirection);
 
         // Применяем фильтрацию по параметрам из запроса
         $created_at_from = $request->created_at_from;
