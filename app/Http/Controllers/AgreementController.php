@@ -33,6 +33,7 @@ use Validator;
 use Log;
 use Str;
 use Auth;
+use DB;
 use Carbon\Carbon;
 
 use App\Services\LocationService;
@@ -143,79 +144,74 @@ class AgreementController extends Controller
         return response()->json($templates, 200);
     }
 
-    public function get_agreements(Request $request){
+    public function get_agreements(Request $request) {
         $language = Language::where('lang_tag', '=', $request->header('Accept-Language'))->first();
-
         $auth_user = auth()->user();
 
-        // Получаем параметры лимита на страницу
-        $per_page = $request->per_page ? $request->per_page : 10;
-        // Получаем параметры сортировки
-        $sortKey = $request->input('sort_key', 'agreements.created_at');  // Поле для сортировки по умолчанию
-        $sortDirection = $request->input('sort_direction', 'asc');  // Направление по умолчанию
+        $per_page = $request->input('per_page', 10);
+        $sortKey = $request->input('sort_key', 'agreements.created_at');
+        $sortDirection = $request->input('sort_direction', 'asc');
 
-        $agreements = Agreement::leftJoin('agreement_parties', 'agreements.agreement_id', '=', 'agreement_parties.agreement_id')
-        ->leftJoin('types_of_agreements', 'agreements.agreement_type_id', '=', 'types_of_agreements.agreement_type_id')
-        ->leftJoin('types_of_agreements_lang', 'types_of_agreements.agreement_type_id', '=', 'types_of_agreements_lang.agreement_type_id')
-        ->leftJoin('users as initiator', 'agreements.initiator_id', '=', 'initiator.user_id')
+        // Начинаем запрос без leftJoin('agreement_parties')
+        $agreements = Agreement::query()
+            ->leftJoin('types_of_agreements', 'agreements.agreement_type_id', '=', 'types_of_agreements.agreement_type_id')
+            ->leftJoin('types_of_agreements_lang', 'types_of_agreements.agreement_type_id', '=', 'types_of_agreements_lang.agreement_type_id')
+            ->leftJoin('users as initiator', 'agreements.initiator_id', '=', 'initiator.user_id')
 
-        // ✅ статус agreement
-        ->leftJoin('types_of_status as agreement_status', 'agreements.status_type_id', '=', 'agreement_status.status_type_id')
-        ->leftJoin('types_of_status_lang as agreement_status_lang', function ($join) use ($language) {
-            $join->on('agreement_status.status_type_id', '=', 'agreement_status_lang.status_type_id')
-                ->where('agreement_status_lang.lang_id', $language->lang_id);
-        })
+            ->leftJoin('types_of_status as agreement_status', 'agreements.status_type_id', '=', 'agreement_status.status_type_id')
+            ->leftJoin('types_of_status_lang as agreement_status_lang', function ($join) use ($language) {
+                $join->on('agreement_status.status_type_id', '=', 'agreement_status_lang.status_type_id')
+                    ->where('agreement_status_lang.lang_id', $language->lang_id);
+            })
 
-        // ✅ контракт
-        ->leftJoin('mediation_contracts', 'agreements.agreement_id', '=', 'mediation_contracts.agreement_id')
+            ->leftJoin('mediation_contracts', 'agreements.agreement_id', '=', 'mediation_contracts.agreement_id')
 
-        // ✅ статус contract
-        ->leftJoin('types_of_status as contract_status', 'mediation_contracts.status_type_id', '=', 'contract_status.status_type_id')
-        ->leftJoin('types_of_status_lang as contract_status_lang', function ($join) use ($language) {
-            $join->on('contract_status.status_type_id', '=', 'contract_status_lang.status_type_id')
-                ->where('contract_status_lang.lang_id', $language->lang_id);
-        })
+            ->leftJoin('types_of_status as contract_status', 'mediation_contracts.status_type_id', '=', 'contract_status.status_type_id')
+            ->leftJoin('types_of_status_lang as contract_status_lang', function ($join) use ($language) {
+                $join->on('contract_status.status_type_id', '=', 'contract_status_lang.status_type_id')
+                    ->where('contract_status_lang.lang_id', $language->lang_id);
+            })
 
-        // ✅ кастомный шаблон
-        ->leftJoin('custom_agreement_templates', 'agreements.custom_template_id', '=', 'custom_agreement_templates.template_id')
+            ->leftJoin('custom_agreement_templates', 'agreements.custom_template_id', '=', 'custom_agreement_templates.template_id')
 
-        ->select(
-            'agreements.uuid',
-            'agreements.custom_template_id',
-            'initiator.first_name as initiator_first_name',
-            'initiator.last_name as initiator_last_name',
-            'types_of_agreements_lang.agreement_type_name',
-            'agreements.created_at',
-            'agreements.custom_template_id',
-            'custom_agreement_templates.template_name',
+            ->select(
+                'agreements.uuid',
+                'agreements.custom_template_id',
+                'initiator.first_name as initiator_first_name',
+                'initiator.last_name as initiator_last_name',
+                'types_of_agreements_lang.agreement_type_name',
+                'agreements.created_at',
+                'custom_agreement_templates.template_name',
 
-            // 👇 статусы
-            'agreements.status_type_id as agreement_status_id',
-            'agreement_status.color as agreement_status_color',
-            'agreement_status_lang.status_type_name as agreement_status_name',
+                'agreements.status_type_id as agreement_status_id',
+                'agreement_status.color as agreement_status_color',
+                'agreement_status_lang.status_type_name as agreement_status_name',
 
-            'mediation_contracts.status_type_id as contract_status_id',
-            'contract_status.color as contract_status_color',
-            'contract_status_lang.status_type_name as contract_status_name',
-        );
+                'mediation_contracts.status_type_id as contract_status_id',
+                'contract_status.color as contract_status_color',
+                'contract_status_lang.status_type_name as contract_status_name'
+            );
 
-        if(!isset($request->show_all_agreements)){
-            // Группируем условия через функцию-замыкание для правильных скобок в SQL
-            $agreements->where(function ($query) use ($auth_user) {
-                $query->where('agreement_parties.user_id', $auth_user->user_id)
-                ->orWhere('agreement_parties.representative_id', $auth_user->user_id);
+        // ✅ Заменяем leftJoin сторон на гдеExists / whereHas
+        if (!$request->has('show_all_agreements')) {
+            $agreements->whereExists(function ($query) use ($auth_user) {
+                $query->select(DB::raw(1))
+                    ->from('agreement_parties')
+                    ->whereColumn('agreement_parties.agreement_id', 'agreements.agreement_id')
+                    ->where(function ($q) use ($auth_user) {
+                        $q->where('agreement_parties.user_id', $auth_user->user_id)
+                        ->orWhere('agreement_parties.representative_id', $auth_user->user_id);
+                    });
             });
         }
-        
-        $agreements->where('types_of_agreements_lang.lang_id', $language->lang_id)
-        ->distinct()
-        ->orderBy($sortKey, $sortDirection);
 
-        // Применяем фильтрацию по параметрам из запроса
+        $agreements->where('types_of_agreements_lang.lang_id', $language->lang_id)
+            ->orderBy($sortKey, $sortDirection);
+
+        // Фильтрация по дате
         $created_at_from = $request->created_at_from;
         $created_at_to = $request->created_at_to;
 
-        // Фильтрация по дате создания
         if ($created_at_from && $created_at_to) {
             $agreements->whereBetween('agreements.created_at', [$created_at_from . ' 00:00:00', $created_at_to . ' 23:59:59']);
         } elseif ($created_at_from) {
@@ -224,7 +220,6 @@ class AgreementController extends Controller
             $agreements->where('agreements.created_at', '<=', $created_at_to . ' 23:59:59');
         }
 
-        // Возвращаем пагинированный результат
         return response()->json($agreements->paginate($per_page)->onEachSide(1), 200);
     }
 
