@@ -206,7 +206,7 @@ class AgreementController extends Controller
         }
 
         $agreements->where('types_of_agreements_lang.lang_id', $language->lang_id)
-            ->orderBy($sortKey, $sortDirection);
+        ->orderBy($sortKey, $sortDirection);
 
         // Фильтрация по дате
         $created_at_from = $request->created_at_from;
