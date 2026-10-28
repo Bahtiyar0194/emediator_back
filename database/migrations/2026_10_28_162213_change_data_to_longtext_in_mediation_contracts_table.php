@@ -14,7 +14,7 @@ class ChangeDataToLongtextInMediationContractsTable extends Migration
     public function up()
     {
         Schema::table('mediation_contracts', function (Blueprint $table) {
-            $table->longText('data')->change();
+            DB::statement('ALTER TABLE mediation_contracts MODIFY COLUMN data LONGTEXT;');
         });
     }
 
@@ -26,7 +26,7 @@ class ChangeDataToLongtextInMediationContractsTable extends Migration
     public function down()
     {
         Schema::table('mediation_contracts', function (Blueprint $table) {
-            //
+            DB::statement('ALTER TABLE mediation_contracts MODIFY COLUMN data TEXT;');
         });
     }
 }

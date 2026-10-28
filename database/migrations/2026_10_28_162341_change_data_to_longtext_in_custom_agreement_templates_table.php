@@ -14,7 +14,7 @@ class ChangeDataToLongtextInCustomAgreementTemplatesTable extends Migration
     public function up()
     {
         Schema::table('custom_agreement_templates', function (Blueprint $table) {
-            $table->longText('data')->change();
+            DB::statement('ALTER TABLE custom_agreement_templates MODIFY COLUMN data LONGTEXT;');
         });
     }
 
@@ -26,7 +26,7 @@ class ChangeDataToLongtextInCustomAgreementTemplatesTable extends Migration
     public function down()
     {
         Schema::table('custom_agreement_templates', function (Blueprint $table) {
-            //
+            DB::statement('ALTER TABLE custom_agreement_templates MODIFY COLUMN data TEXT;');
         });
     }
 }
