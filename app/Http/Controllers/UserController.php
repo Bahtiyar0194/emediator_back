@@ -108,23 +108,11 @@ class UserController extends Controller
                 'users.email',
                 'users.phone',
                 'users.avatar',
+                'users.data',
                 'users.created_at',
                 'types_of_status_lang.status_type_name',
                 'types_of_status.color as status_color',
                 DB::raw('GROUP_CONCAT(DISTINCT types_of_user_roles_lang.user_role_type_name) as roles')
-            )
-            ->groupBy(
-                'users.user_id',
-                'users.first_name',
-                'users.last_name',
-                'users.iin',
-                'users.email',
-                'users.phone',
-                'users.avatar',
-                'users.data',
-                'users.created_at',
-                'types_of_status_lang.status_type_name',
-                'types_of_status.color'
             )
             ->orderBy($sortKey, $sortDirection);
 
