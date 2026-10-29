@@ -176,7 +176,22 @@ class UserController extends Controller
             $users->where('users.created_at', '<=', $created_at_to . ' 23:59:59');
         }
         
-        return response()->json($users->paginate($per_page)->onEachSide(1), 200);
+        $paginatedUsers = $users->paginate($per_page)->onEachSide(1);
+        
+        // Теперь модифицируем коллекцию
+        $paginatedUsers->getCollection()->transform(function ($user) {
+
+            if(isset($user->data)){
+                $user_data = json_decode(Crypt::decryptString($user->data));
+
+                $user->email = $user_data->email ?? '';
+                $user->phone = $user_data->phone ?? '';
+            }
+            
+            return $user;
+        });
+        
+        return response()->json($paginatedUsers, 200);
     }
 
     public function get_user(Request $request)
