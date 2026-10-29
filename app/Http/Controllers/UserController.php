@@ -121,6 +121,7 @@ class UserController extends Controller
                 'users.email',
                 'users.phone',
                 'users.avatar',
+                'users.data',
                 'users.created_at',
                 'types_of_status_lang.status_type_name',
                 'types_of_status.color'
