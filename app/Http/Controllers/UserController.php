@@ -94,10 +94,7 @@ class UserController extends Controller
         $sortKey = $request->input('sort_key', 'created_at');  // Поле для сортировки по умолчанию
         $sortDirection = $request->input('sort_direction', 'asc');  // Направление по умолчанию
 
-        $users = User::leftJoin('users_roles', 'users.user_id', '=', 'users_roles.user_id')
-            ->leftJoin('types_of_user_roles', 'users_roles.role_type_id', '=', 'types_of_user_roles.role_type_id')
-            ->leftJoin('types_of_user_roles_lang', 'types_of_user_roles.role_type_id', '=', 'types_of_user_roles_lang.role_type_id')
-            ->leftJoin('types_of_status', 'users.status_type_id', '=', 'types_of_status.status_type_id')
+        $users = User::leftJoin('types_of_status', 'users.status_type_id', '=', 'types_of_status.status_type_id')
             ->leftJoin('types_of_status_lang', 'types_of_status.status_type_id', '=', 'types_of_status_lang.status_type_id')
             ->where('types_of_status_lang.lang_id', '=', $language->lang_id)
             ->select(
@@ -112,7 +109,6 @@ class UserController extends Controller
                 'users.created_at',
                 'types_of_status_lang.status_type_name',
                 'types_of_status.color as status_color',
-                DB::raw('GROUP_CONCAT(DISTINCT types_of_user_roles_lang.user_role_type_name) as roles')
             )
             ->orderBy($sortKey, $sortDirection);
 
